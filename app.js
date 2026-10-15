@@ -1,7 +1,14 @@
 const $=s=>document.querySelector(s);
 const today=()=>new Date().toLocaleDateString('en-CA');
 const DEF={settings:{kcal:1750,p:145,c:165,f:55,unit:'lb',bar:45,barKg:20,plates:[45,35,25,10,5,2.5,1.25],platesKg:[25,20,15,10,5,2.5,1.25],rest:120},customEx:[],log:{},custom:[],favs:[],recents:[],weights:[],meso:null,sessions:[]};
-let S=Object.assign(structuredClone(DEF),JSON.parse(localStorage.getItem('fit')||'{}'));
+const KEY='fit',BAK='fit-bak';let LOAD_NOTE='',NEED_RESTORE=false;
+function readLS(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function loadState(){const raw=readLS(KEY);
+ if(raw){try{const o=JSON.parse(raw);if(o&&typeof o==='object')return o;throw 0}catch(e){
+  try{localStorage.setItem('fit-corrupt-'+Date.now(),raw)}catch(_){}LOAD_NOTE='Saved data could not be read. A copy was kept and a backup restore was attempted.'}}
+ const b=readLS(BAK);if(b){try{const o=JSON.parse(b);if(o&&o.data){LOAD_NOTE||=(raw?'':'Main data was missing; ')+'restored from on-device backup ('+new Date(o.t).toLocaleString()+').';return o.data}}catch(e){}}
+ NEED_RESTORE=true;return {}}
+let S=Object.assign(structuredClone(DEF),loadState());
 {const g=S.settings;if(g.kcal===1700&&g.p===140&&g.c===160&&g.f===55)Object.assign(g,{kcal:1750,p:145,c:165,f:55});S.customEx||=[];g.bar??=45;g.barKg??=20;g.plates??=[45,35,25,10,5,2.5,1.25];g.platesKg??=[25,20,15,10,5,2.5,1.25];g.rest??=120;S.active??=null;if(S.meso&&S.meso.program&&!S.myPlan)S.myPlan={name:S.meso.split,schedule:S.meso.schedule,days:structuredClone(S.meso.plan)}}
 const LIB=()=>{const seen=new Set(EXERCISES.map(e=>e.name));return[...EXERCISES,...planEx().filter(e=>!seen.has(e.name)&&seen.add(e.name)),...S.customEx]};
 const COARSE={chest:['Chest','Front Delts','Triceps'],back:['Lats','Upper Back','Biceps'],shoulders:['Side Delts','Front Delts'],biceps:['Biceps','Forearms'],triceps:['Triceps'],quads:['Quads','Glutes'],hamstrings:['Hamstrings','Glutes'],glutes:['Glutes','Hamstrings'],calves:['Calves'],abs:['Abs']};
@@ -29,7 +36,26 @@ function saveDemo(en,reset){const n=decodeURIComponent(en);S.demoOv||={};let v=r
  const id=ytId(v);if(id)v='https://www.youtube.com/watch?v='+id;if(v)S.demoOv[n]=v;else delete S.demoOv[n];save();closeModal();if(typeof renderWorkout==='function'&&S.meso)renderWorkout()}
 function demoUrl(e){const o=(S.demoOv||{})[e.name];if(o)return o;if(e.video)return e.video;const c=S.customEx.find(x=>x.name===e.name);if(c&&c.video)return c.video;return VIDEOS[e.name]?'https://www.youtube.com/watch?v='+VIDEOS[e.name]:'https://www.youtube.com/results?search_query='+encodeURIComponent(e.name+' exercise form')}
 function demoLink(e){return `<a class="demo" href="${esc(demoUrl(e))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ Watch demo</a> <button class="edl" onclick="event.stopPropagation();editDemo(decodeURIComponent('${encN(e.name)}'))">✎ Edit</button>`}
-const save=()=>localStorage.setItem('fit',JSON.stringify(S));
+function hasData(o){return !!o&&((o.weights&&o.weights.length)||(o.sessions&&o.sessions.length)||Object.values(o.log||{}).some(x=>x&&x.length)||(o.custom&&o.custom.length)||!!o.meso)}
+let bakTimer=null;
+function save(){const j=JSON.stringify(S);try{localStorage.setItem(KEY,j)}catch(e){toast('Could not save — storage full or blocked. Export a backup.')}clearTimeout(bakTimer);bakTimer=setTimeout(()=>backupNow(j),1500)}
+function backupNow(j=JSON.stringify(S)){if(!hasData(S))return;const t=Date.now();try{localStorage.setItem(BAK,JSON.stringify({t,data:S}))}catch(e){}
+ idb(db=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');st.put({t,data:j},'latest');st.put({t,data:j},'day-'+today());
+  st.getAllKeys().onsuccess=e=>{const days=e.target.result.filter(k=>String(k).startsWith('day-')).sort();days.slice(0,-7).forEach(k=>st.delete(k))}});
+ try{localStorage.setItem('fit-lastbak',String(t))}catch(e){}}
+function idb(fn){try{const r=indexedDB.open('fitcoach',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>fn(r.result);r.onerror=()=>{}}catch(e){}}
+function idbGet(k){return new Promise(res=>{let done=false;setTimeout(()=>{if(!done)res(null)},3000);idb(db=>{const q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>{done=true;res(q.result||null)};q.onerror=()=>{done=true;res(null)}})})}
+function toast(m,ms=5000){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=m;t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,ms)}
+async function startupStorage(){
+ if(NEED_RESTORE){const b=await idbGet('latest');if(b&&b.data){try{const o=JSON.parse(b.data);if(hasData(o)&&!hasData(S)){S=Object.assign(structuredClone(DEF),o);save();toast('Restored your data from the on-device backup ('+new Date(b.t).toLocaleString()+').',8000);show(location.hash.slice(1)||'food')}}catch(e){}}}
+ else if(LOAD_NOTE){save();toast(LOAD_NOTE,8000)}
+ if(hasData(S)&&!readLS(BAK))backupNow();
+ try{if(navigator.storage&&navigator.storage.persist){window.__persisted=await navigator.storage.persisted();if(!window.__persisted)window.__persisted=await navigator.storage.persist()}}catch(e){}
+ iosBanner()}
+function isIOS(){return /iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+function isStandalone(){return navigator.standalone===true||matchMedia('(display-mode: standalone)').matches}
+function iosBanner(){if(!isIOS()||isStandalone()||readLS('fit-ios-tip'))return;const d=document.createElement('div');d.id='iosb';
+ d.innerHTML=`<b>Install FitCoach</b><p>Tap <span class="shr">Share ⬆︎</span> then <b>Add to Home Screen</b>. Safari can clear website data, and the Home Screen app keeps its <b>own separate data</b> from Safari, so pick one place to log (Home Screen is best) and export a backup now and then.</p><div class="inl"><button class="btn sm" onclick="exportData()">Export backup</button><button class="btn sec sm" onclick="localStorage.setItem('fit-ios-tip','1');this.closest('#iosb').remove()">Got it</button></div>`;document.body.appendChild(d)}
 let viewDate=today(),charts={};
 const allFoods=()=>[...S.custom,...FOODS];
 const foodById=id=>allFoods().find(f=>f.id===id);
@@ -253,12 +279,14 @@ function renderSettings(){const g=S.settings;
  $('#settings').innerHTML=`<div class="card"><h3>Daily targets</h3><div class="grid4">
  ${[['kcal','Calories'],['p','Protein g'],['c','Carbs g'],['f','Fat g']].map(([k,l])=>`<label>${l}<input type="number" value="${g[k]}" onchange="S.settings.${k}=+this.value;save()"></label>`).join('')}</div>
  <p class="muted" id="mcal"></p><label>Weight unit<select onchange="S.settings.unit=this.value;save();renderSettings()"><option ${g.unit==='lb'?'selected':''}>lb</option><option ${g.unit==='kg'?'selected':''}>kg</option></select></label></div>
- <div class="card"><h3>Gym setup</h3><p class="muted">Bar ${barW()} ${S.settings.unit} · plates ${plates().join(', ')} · rest ${fmt(S.settings.rest)}</p><button class="btn sec" onclick="plateModal()">Bar & plates</button> <button class="btn sec" onclick="restModal()">Rest timer</button></div><div class="card"><h3>Custom exercises</h3>${S.customEx.length?S.customEx.map((x,i)=>`<div class="row"><div><b>${esc(x.name)}</b><small>${x.muscle} · ${demoLink(x)}</small></div><button class="x" onclick="S.customEx.splice(${i},1);save();renderSettings()">✕</button></div>`).join(''):'<p class="muted">None yet. They become available in new plans and swaps.</p>'}<button class="btn sec" onclick="customExForm()">+ Add exercise</button></div><div class="card"><h3>Data</h3><p class="muted">Everything is stored only on this phone (localStorage).</p>
+ <div class="card"><h3>Gym setup</h3><p class="muted">Bar ${barW()} ${S.settings.unit} · plates ${plates().join(', ')} · rest ${fmt(S.settings.rest)}</p><button class="btn sec" onclick="plateModal()">Bar & plates</button> <button class="btn sec" onclick="restModal()">Rest timer</button></div><div class="card"><h3>Custom exercises</h3>${S.customEx.length?S.customEx.map((x,i)=>`<div class="row"><div><b>${esc(x.name)}</b><small>${x.muscle} · ${demoLink(x)}</small></div><button class="x" onclick="S.customEx.splice(${i},1);save();renderSettings()">✕</button></div>`).join(''):'<p class="muted">None yet. They become available in new plans and swaps.</p>'}<button class="btn sec" onclick="customExForm()">+ Add exercise</button></div><div class="card"><h3>Data &amp; backups</h3><p class="muted">Everything is stored only in this browser on this phone${isIOS()?(isStandalone()?' (Home Screen app — separate from Safari)':' (Safari — separate from the Home Screen app)'):''}.</p>
+ ${(()=>{const lb=+readLS('fit-lastbak')||0,le=S.lastExport||0,old=!le||Date.now()-le>7*864e5;return `<div class="bk ${old?'warn':''}"><div><small>Last auto backup (on this device)</small><b>${lb?new Date(lb).toLocaleString():'not yet'}</b></div><div><small>Last exported backup file</small><b>${le?new Date(le).toLocaleDateString():'never'}</b></div>${old?'<p>Export a backup file so you can restore if this browser clears its data.</p>':''}<button class="btn" onclick="exportData()">Export backup</button></div>`})()}
+ <p class="muted">Storage ${window.__persisted?'is marked persistent ✓':'may be cleared by the browser'}.</p>
  <button class="btn sec" onclick="seedDemo()">Load demo data</button> <button class="btn sec" onclick="exportData()">Export backup</button> <button class="btn sec" onclick="exportProgram()">Export program</button> <button class="btn sec" onclick="importProgram()">Import program</button>
- <label class="btn sec file">Import backup<input type="file" accept=".json" onchange="importData(this)" hidden></label> <button class="btn danger" onclick="if(confirm('Erase ALL data?')){localStorage.removeItem('fit');location.reload()}">Reset all</button></div>
+ <label class="btn sec file">Import backup<input type="file" accept=".json" onchange="importData(this)" hidden></label> <button class="btn danger" onclick="if(confirm('Erase ALL data, including on-device backups?')){['fit','fit-bak','fit-lastbak'].forEach(k=>localStorage.removeItem(k));try{indexedDB.deleteDatabase('fitcoach')}catch(e){}setTimeout(()=>location.reload(),300)}">Reset all</button></div>
  <p class="muted center">FitCoach v1 · ${FOODS.length} foods · ${LIB().length} exercises</p>`;
  $('#mcal').textContent=`Macros = ${g.p*4+g.c*4+g.f*9} kcal`}
-function exportData(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='fitcoach-'+today()+'.json';a.click()}
+function exportData(){S.lastExport=Date.now();save();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='fitcoach-'+today()+'.json';a.click()}
 function importData(inp){const r=new FileReader();r.onload=()=>{S=Object.assign(structuredClone(DEF),JSON.parse(r.result));save();location.reload()};r.readAsText(inp.files[0])}
 function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of workouts)?'))return;
  const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return x.toLocaleDateString('en-CA')};
@@ -275,5 +303,5 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
 function closeModal(){$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
-show((location.hash.slice(1)in{food:1,workout:1,progress:1,settings:1})?location.hash.slice(1):'food');
+startupStorage();show((location.hash.slice(1)in{food:1,workout:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
