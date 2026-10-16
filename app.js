@@ -39,13 +39,13 @@ function demoLink(e){return `<a class="demo" href="${esc(demoUrl(e))}" target="_
 function hasData(o){return !!o&&((o.weights&&o.weights.length)||(o.sessions&&o.sessions.length)||Object.values(o.log||{}).some(x=>x&&x.length)||(o.custom&&o.custom.length)||!!o.meso)}
 let bakTimer=null;
 function save(){const j=JSON.stringify(S);try{localStorage.setItem(KEY,j)}catch(e){toast('Could not save — storage full or blocked. Export a backup.')}clearTimeout(bakTimer);bakTimer=setTimeout(()=>backupNow(j),1500)}
-function backupNow(j=JSON.stringify(S)){if(!hasData(S))return;const t=Date.now();try{localStorage.setItem(BAK,JSON.stringify({t,data:S}))}catch(e){}
+function backupNow(j=JSON.stringify(S)){if(!hasData(S)&&!readLS(BAK))return;const t=Date.now();try{localStorage.setItem(BAK,JSON.stringify({t,data:S}))}catch(e){}
  idb(db=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');st.put({t,data:j},'latest');st.put({t,data:j},'day-'+today());
   st.getAllKeys().onsuccess=e=>{const days=e.target.result.filter(k=>String(k).startsWith('day-')).sort();days.slice(0,-7).forEach(k=>st.delete(k))}});
  try{localStorage.setItem('fit-lastbak',String(t))}catch(e){}}
 function idb(fn){try{const r=indexedDB.open('fitcoach',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>fn(r.result);r.onerror=()=>{}}catch(e){}}
 function idbGet(k){return new Promise(res=>{let done=false;setTimeout(()=>{if(!done)res(null)},3000);idb(db=>{const q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>{done=true;res(q.result||null)};q.onerror=()=>{done=true;res(null)}})})}
-function toast(m,ms=5000){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=m;t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,ms)}
+function toast(m,ms=5000,label,fn){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=m;if(label){const b=document.createElement('button');b.textContent=label;b.className='tbtn';b.onclick=()=>{t.hidden=true;fn()};t.appendChild(b)}t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,ms)}
 async function startupStorage(){
  if(NEED_RESTORE){const b=await idbGet('latest');if(b&&b.data){try{const o=JSON.parse(b.data);if(hasData(o)&&!hasData(S)){S=Object.assign(structuredClone(DEF),o);save();toast('Restored your data from the on-device backup ('+new Date(b.t).toLocaleString()+').',8000);show(location.hash.slice(1)||'food')}}catch(e){}}}
  else if(LOAD_NOTE){save();toast(LOAD_NOTE,8000)}
@@ -190,7 +190,7 @@ function renderOverview(){const M=S.meso,day=M.plan[M.day],deload=M.week>=WEEKS&
 function planModal(){modal(`<h3>Change plan</h3><p class="muted">Logged history is kept.</p>${S.myPlan&&!isProg()?`<button class="btn wide" onclick="loadProgram()">Use ${esc(S.myPlan.name)}</button>`:''}<button class="btn sec wide" onclick="closeModal();importProgram()">Import program</button><button class="btn sec wide" onclick="if(confirm('Leave the current plan and generate a new mesocycle? Your program stays saved on this phone.')){S.meso=null;S.active=null;save();closeModal();renderWorkout()}">Generate a mesocycle instead</button>`)}
 function renderActive(){const M=S.meso,A=act(),day=M.plan[M.day],ci=A.cur,e=day.ex[ci],L=lastSets(e.name),sg=suggest(e),u=S.settings.unit,uni=isUni(e);
  const ds=A.sets[ci],uL=u[0].toUpperCase()+u.slice(1);
- $('#workout').innerHTML=`<div class="atop"><button class="link" onclick="showOv=true;closeKP(false);renderWorkout()">‹ Overview</button><b>${day.name}</b><button id="rest" class="restpill" onclick="restModal()">Rest</button><button class="btn sm" onclick="finishWorkout()">Finish</button></div>
+ $('#workout').innerHTML=`<div class="atop"><button class="link" onclick="showOv=true;closeKP(false);renderWorkout()">‹ Overview</button><b>${day.name}</b><button id="rest" class="restpill" onclick="restModal()">Rest</button><button class="more" aria-label="Workout options" onclick="workoutMenu()">⋯</button><button class="btn sm" onclick="finishWorkout()">Finish</button></div>
  <div class="car">${day.ex.map((x,i)=>{const d=A.sets[i],n=d.filter(s=>s.done).length;return `<button class="ci ${i===ci?'on':''} ${n===d.length?'fin':''}" onclick="S.active.cur=${i};save();renderWorkout()"><div class="cth">${thumb(x)}</div><small>${esc(x.name)}</small><em>${n}/${d.length}</em></button>`}).join('')}</div>
  <div class="card">
   <div class="exh">${thumbLink(e,'th big')}<div class="grow">${nameLink(e)}<div>${musOf(e).slice(0,2).map((m,k)=>`<span class="mtag ${k?'':'pri'}">${m}</span>`).join(' ')} ${demoLink(e)}</div></div><button class="link" onclick="swapEx(${ci})">⇄ Swap</button></div>
@@ -250,6 +250,15 @@ function saveCustomEx(ei){const n=$('#xn').value.trim();if(!n)return;if(LIB().so
  let v=$('#xv').value.trim();if(v&&!/^https?:\/\//.test(v))v='https://'+v;
  S.customEx.push({name:n,muscle:$('#xm').value,type:$('#xt').value,equip:$('#xq').value,uni:$('#xu').checked,video:v,custom:1});save();
  if(ei>=0)swapEx(ei);else{closeModal();renderSettings()}}
+function workoutMenu(){modal(`<h3>Workout options</h3><button class="btn danger wide" onclick="discardWorkout()">Discard workout</button><p class="muted">Clears this in-progress workout without saving. Your program day won't change.</p>`)}
+function discardWorkout(){if(!confirm('Discard this workout? Logged sets in it will not be saved.'))return;const copy=S.active,cur=showOv;S.active=null;restEnd=0;clearInterval(restIv);closeKP(false);showOv=false;save();closeModal();renderWorkout();window.scrollTo(0,0)
+ toast('Workout discarded',5000,'Undo',()=>{S.active=copy;save();renderWorkout()})}
+function openSession(i){const s=S.sessions[i];if(!s)return;const by={};s.sets.forEach(x=>(by[x.ex]||=[]).push(x));
+ modal(`<h3>${esc(s.day)}</h3><p class="muted">${s.date} · ${s.sets.length} sets · ${Math.round(s.sets.reduce((a,x)=>a+x.w*x.r,0)).toLocaleString()} vol</p>${Object.entries(by).map(([n,xs])=>`<div class="row"><div><b>${esc(n)}</b><small>${xs.map(x=>`${x.w}×${x.r}${x.rir!==undefined?'@'+x.rir:''}`).join(', ')}</small></div></div>`).join('')}
+ <button class="btn danger wide" onclick="deleteSession(${i})">Delete workout</button>`)}
+function deleteSession(i){if(!confirm('Delete this workout from your history? Charts and previous numbers will update.'))return;const [rm]=S.sessions.splice(i,1);save();closeModal();renderCur()
+ toast('Workout deleted',5000,'Undo',()=>{S.sessions.splice(i,0,rm);save();renderCur()})}
+function renderCur(){const t=location.hash.slice(1)||'food';({food:renderFood,workout:renderWorkout,progress:renderProgress,settings:renderSettings}[t]||renderProgress)()}
 function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
  day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
@@ -263,7 +272,7 @@ function renderProgress(){const lifts=[...new Set(S.sessions.flatMap(s=>s.sets.m
  $('#progress').innerHTML=!S.sessions.length?'<div class="card"><p class="muted">Log workouts to see progress (or load demo data in Settings).</p></div>':`
  <div class="card"><h3>Lift progress</h3><select id="lsel" onchange="drawLift()">${lifts.map(l=>`<option>${esc(l)}</option>`).join('')}</select><div id="lstat" class="muted"></div><div class="chart"><canvas id="lchart"></canvas></div></div>
  <div class="card"><h3>Weekly sets per muscle</h3><div class="chart tall"><canvas id="vchart"></canvas></div></div>
- <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-6).reverse().map(s=>`<div class="row"><div><b>${s.day}</b><small>${s.date} · ${s.sets.length} sets</small></div><div class="rt">${Math.round(s.sets.reduce((a,x)=>a+x.w*x.r,0)).toLocaleString()} vol</div></div>`).join('')}</div>`;
+ <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-6).reverse().map((s,ri)=>`<div class="row tap" onclick="openSession(${S.sessions.length-1-ri})"><div><b>${s.day}</b><small>${s.date} · ${s.sets.length} sets</small></div><div class="rt">${Math.round(s.sets.reduce((a,x)=>a+x.w*x.r,0)).toLocaleString()} vol</div></div>`).join('')}</div>`;
  if(S.sessions.length){drawLift();drawVolume()}}
 function drawLift(){const n=$('#lsel').value,pts=S.sessions.map(s=>({d:s.date,sets:s.sets.filter(x=>x.ex===n)})).filter(p=>p.sets.length);
  const e=pts.map(p=>r1(Math.max(...p.sets.map(e1rm)))),top=pts.map(p=>Math.max(...p.sets.map(x=>x.w)));
