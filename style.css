@@ -70,7 +70,7 @@ nav button{flex:1;background:none;border:0;color:var(--m2);font-size:20px;paddin
 .more{background:var(--c2);color:#fff;border:0;border-radius:999px;width:34px;height:32px;font-size:18px;line-height:1}
 .tbtn{float:right;background:#fff;color:#000;border:0;border-radius:10px;padding:5px 12px;font-weight:700;margin:-3px 0 -3px 10px;font-family:inherit}
 nav button span{font-size:10px;white-space:nowrap}
-.safety{background:#3a2a10;border:1px solid #ff9f0a66;color:#ffd08a;border-radius:16px;padding:12px 14px;margin-top:10px;font-size:14px;line-height:1.4}
+.safety{color:var(--m);font-size:12px;margin:10px 2px 0;padding-left:8px;border-left:2px solid var(--c3)}
 .wk8 span{cursor:pointer;line-height:1.2}.wk8 small{font-size:9px}.wk8 .now:not(.cur){outline:1.5px solid #fff}
 .wbar{width:110px;height:8px;background:var(--c2);border-radius:4px;overflow:hidden}.wbar i{display:block;height:100%;background:#fff}
 .clet{width:36px;height:36px;border-radius:12px;background:var(--c2);display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}.csess.ok .clet{background:#fff;color:#000}.csess.ok .ckb{background:#fff;border-color:#fff}
