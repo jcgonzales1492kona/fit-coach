@@ -13,7 +13,7 @@ function parseT(v){const m=String(v).trim().match(/^(\d{1,2}):(\d{1,2}(?:\.\d)?)
 function renderCond(){const c=cst(),cw=curCondWeek(),w=condWeek??Math.min(8,Math.max(1,cw)),B=blockOf(w);
  const isDone=k=>!!c.done['w'+w+k],req=w<=2?['A','B']:['A','B','C'],n=req.filter(isDone).length;
  const tests=[...c.tests].sort((a,b)=>a.date<b.date?-1:1),best=tests.length?Math.min(...tests.map(t=>t.t)):null;
- $('#cond').innerHTML=`<p class="safety">Stop if anything near your procedure areas hurts.</p>
+ $('#cond').innerHTML=`
  <div class="ovh"><small class="muted">8-week conditioning · 2–3 sessions/week</small><div class="ovt"><h2>Week ${w}</h2><span class="pill">${cw<1?'Starts '+c.start:cw>8?'Program complete':'Current: week '+cw}</span></div></div>
  <div class="weeks wk8">${Array.from({length:8},(_,i)=>{const k=i+1,r=k<=2?['A','B']:['A','B','C'],d=r.filter(x=>c.done['w'+k+x]).length;return `<span class="${k===w?'cur':d>=r.length?'done':''} ${k===cw?'now':''}" onclick="condWeek=${k};renderCond()">W${k}${d?`<br><small>${d}/${r.length}</small>`:''}</span>`}).join('')}</div>
  <div class="card"><div class="exh"><div class="grow"><b>Week ${w} progress</b><small class="muted" style="display:block">${n}/${req.length} done${w<=2?' · C optional':''}</small></div><div class="wbar"><i style="width:${n/req.length*100}%"></i></div></div></div>
