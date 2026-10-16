@@ -36,7 +36,7 @@ function saveDemo(en,reset){const n=decodeURIComponent(en);S.demoOv||={};let v=r
  const id=ytId(v);if(id)v='https://www.youtube.com/watch?v='+id;if(v)S.demoOv[n]=v;else delete S.demoOv[n];save();closeModal();if(typeof renderWorkout==='function'&&S.meso)renderWorkout()}
 function demoUrl(e){const o=(S.demoOv||{})[e.name];if(o)return o;if(e.video)return e.video;const c=S.customEx.find(x=>x.name===e.name);if(c&&c.video)return c.video;return VIDEOS[e.name]?'https://www.youtube.com/watch?v='+VIDEOS[e.name]:'https://www.youtube.com/results?search_query='+encodeURIComponent(e.name+' exercise form')}
 function demoLink(e){return `<a class="demo" href="${esc(demoUrl(e))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ Watch demo</a> <button class="edl" onclick="event.stopPropagation();editDemo(decodeURIComponent('${encN(e.name)}'))">✎ Edit</button>`}
-function hasData(o){return !!o&&((o.weights&&o.weights.length)||(o.sessions&&o.sessions.length)||Object.values(o.log||{}).some(x=>x&&x.length)||(o.custom&&o.custom.length)||!!o.meso)}
+function hasData(o){return !!o&&((o.weights&&o.weights.length)||(o.sessions&&o.sessions.length)||Object.values(o.log||{}).some(x=>x&&x.length)||(o.cond&&(Object.keys(o.cond.done||{}).length||(o.cond.tests||[]).length))||(o.custom&&o.custom.length)||!!o.meso)}
 let bakTimer=null;
 function save(){const j=JSON.stringify(S);try{localStorage.setItem(KEY,j)}catch(e){toast('Could not save — storage full or blocked. Export a backup.')}clearTimeout(bakTimer);bakTimer=setTimeout(()=>backupNow(j),1500)}
 function backupNow(j=JSON.stringify(S)){if(!hasData(S)&&!readLS(BAK))return;const t=Date.now();try{localStorage.setItem(BAK,JSON.stringify({t,data:S}))}catch(e){}
@@ -66,7 +66,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 function show(t){if(t!=='workout'&&typeof KP!=='undefined'&&KP)closeKP(false);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
  document.querySelectorAll('section.tab').forEach(s=>s.hidden=s.id!==t);
- ({food:renderFood,workout:renderWorkout,progress:renderProgress,settings:renderSettings})[t]();location.hash=t;window.scrollTo(0,0)}
+ ({food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings})[t]();location.hash=t;window.scrollTo(0,0)}
 
 /* ---------- food ---------- */
 function ring(val,target,color,label,unit){const pct=Math.min(val/target,1),R=30,C=2*Math.PI*R;
@@ -258,7 +258,7 @@ function openSession(i){const s=S.sessions[i];if(!s)return;const by={};s.sets.fo
  <button class="btn danger wide" onclick="deleteSession(${i})">Delete workout</button>`)}
 function deleteSession(i){if(!confirm('Delete this workout from your history? Charts and previous numbers will update.'))return;const [rm]=S.sessions.splice(i,1);save();closeModal();renderCur()
  toast('Workout deleted',5000,'Undo',()=>{S.sessions.splice(i,0,rm);save();renderCur()})}
-function renderCur(){const t=location.hash.slice(1)||'food';({food:renderFood,workout:renderWorkout,progress:renderProgress,settings:renderSettings}[t]||renderProgress)()}
+function renderCur(){const t=location.hash.slice(1)||'food';({food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderProgress)()}
 function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
  day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
@@ -312,5 +312,5 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
 function closeModal(){$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
-startupStorage();show((location.hash.slice(1)in{food:1,workout:1,progress:1,settings:1})?location.hash.slice(1):'food');
+startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
