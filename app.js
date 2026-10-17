@@ -267,8 +267,8 @@ function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
  day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
  if(!confirm(`Finish workout with ${sets.length} sets?`))return;
- S.sessions.push({date:today(),week:M.week,day:day.name,sets});S.active=null;restEnd=0;closeKP(false);M.day++;if(M.day>=M.plan.length){M.day=0;M.week++;if(M.week>WEEKS&&!isProg()){alert('Mesocycle complete! Generate a new one.');S.meso=null}}
- save();renderWorkout();window.scrollTo(0,0)}
+ const prev=S.sessions.slice();S.sessions.push({date:today(),week:M.week,day:day.name,sets});S.active=null;restEnd=0;closeKP(false);M.day++;if(M.day>=M.plan.length){M.day=0;M.week++;if(M.week>WEEKS&&!isProg()){alert('Mesocycle complete! Generate a new one.');S.meso=null}}
+ save();renderWorkout();window.scrollTo(0,0);doneSummary(day.name,sets,prev)}
 
 /* ---------- progress ---------- */
 const e1rm=s=>s.w*(1+s.r/30);
@@ -318,3 +318,13 @@ function closeModal(){$('#modal').hidden=true;if(location.hash==='#settings')ren
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+
+function doneSummary(name,sets,prev){const u=S.settings.unit||'lb',by={};sets.forEach(x=>(by[x.ex]||=[]).push(x));
+ const best={};prev.forEach(ss=>ss.sets.forEach(x=>{const v=x.w*(1+x.r/30);if(v>(best[x.ex]||0))best[x.ex]=v}));
+ const vol=Math.round(sets.reduce((a,x)=>a+x.w*x.r,0)),reps=sets.reduce((a,x)=>a+x.r,0);let prs=0;
+ const rows=Object.entries(by).map(([ex,xs])=>{const top=xs.reduce((a,b)=>b.w*(1+b.r/30)>a.w*(1+a.r/30)?b:a);const v=top.w*(1+top.r/30),pr=best[ex]&&v>best[ex]+0.01;if(pr)prs++;
+  return `<div class="row"><div><b>${esc(ex)}</b><small>${xs.length} set${xs.length>1?'s':''} · top ${top.w} ${u} × ${top.r}</small></div>${pr?'<span class="prb">PR</span>':''}</div>`}).join('');
+ modal(`<div class="done"><div class="big">🎉</div><h3>Workout complete!</h3><p class="muted">${esc(name)} done. Great work, Jenna.</p>
+ <div class="dstats"><div><b>${sets.length}</b><small>sets</small></div><div><b>${reps}</b><small>reps</small></div><div><b>${vol.toLocaleString()}</b><small>${u} moved</small></div><div><b>${prs}</b><small>PR${prs===1?'':'s'}</small></div></div>
+ ${prs?`<p class="prmsg">New personal best${prs>1?'s':''} today. Keep it up!</p>`:''}<div class="dlist">${rows}</div></div>`);
+ const c=$('#modal .sheet>button.link');if(c)c.textContent='Done'}
