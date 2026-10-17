@@ -77,3 +77,4 @@ nav button span{font-size:10px;white-space:nowrap}
 .prompt{outline:1.5px solid #22c55e88}
 #ctimer{position:fixed;inset:0;z-index:60;background:#121212;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}#ctimer.hard{background:#3b0d0d}#ctimer.easy{background:#0d2a17}
 .ctt{color:var(--m);font-size:15px}.ctr{color:#d1d1d6;margin-top:6px}.ctl{font-size:40px;font-weight:900;margin:16px 0 4px}.ctn{font-size:110px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-3px}.ctx{color:var(--m);margin-top:8px}.ctb{margin-top:28px}#ctimer p{color:#d1d1d6}
+input,select{box-sizing:border-box;max-width:100%;min-width:0}input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-height:46px;text-align:left}input[type=date]::-webkit-date-and-time-value{text-align:left}label{display:block;min-width:0}
