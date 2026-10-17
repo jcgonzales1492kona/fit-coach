@@ -9,7 +9,7 @@ function loadState(){const raw=readLS(KEY);
  const b=readLS(BAK);if(b){try{const o=JSON.parse(b);if(o&&o.data){LOAD_NOTE||=(raw?'':'Main data was missing; ')+'restored from on-device backup ('+new Date(o.t).toLocaleString()+').';return o.data}}catch(e){}}
  NEED_RESTORE=true;return {}}
 let S=Object.assign(structuredClone(DEF),loadState());
-{const g=S.settings;if(g.kcal===1700&&g.p===140&&g.c===160&&g.f===55)Object.assign(g,{kcal:1750,p:145,c:165,f:55});S.customEx||=[];g.bar??=45;g.barKg??=20;g.plates??=[45,35,25,10,5,2.5,1.25];g.platesKg??=[25,20,15,10,5,2.5,1.25];g.rest??=120;S.active??=null;if(S.meso&&S.meso.program&&!S.myPlan)S.myPlan={name:S.meso.split,schedule:S.meso.schedule,days:structuredClone(S.meso.plan)}}
+{const g=S.settings;if(!S.tgt1750){Object.assign(g,{kcal:1750,p:145,c:165,f:55});S.tgt1750=1}S.customEx||=[];g.bar??=45;g.barKg??=20;g.plates??=[45,35,25,10,5,2.5,1.25];g.platesKg??=[25,20,15,10,5,2.5,1.25];g.rest??=120;S.active??=null;if(S.meso&&S.meso.program&&!S.myPlan)S.myPlan={name:S.meso.split,schedule:S.meso.schedule,days:structuredClone(S.meso.plan)}}
 const LIB=()=>{const seen=new Set(EXERCISES.map(e=>e.name));return[...EXERCISES,...planEx().filter(e=>!seen.has(e.name)&&seen.add(e.name)),...S.customEx]};
 const COARSE={chest:['Chest','Front Delts','Triceps'],back:['Lats','Upper Back','Biceps'],shoulders:['Side Delts','Front Delts'],biceps:['Biceps','Forearms'],triceps:['Triceps'],quads:['Quads','Glutes'],hamstrings:['Hamstrings','Glutes'],glutes:['Glutes','Hamstrings'],calves:['Calves'],abs:['Abs']};
 const musOf=e=>e.muscles||COARSE[e.muscle]||[e.muscle];
