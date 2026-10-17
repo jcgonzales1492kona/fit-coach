@@ -6,10 +6,13 @@ const COND=[
  {weeks:'7–8',A:{t:'Easy row',d:'30–35 min easy row'},B:{t:'All-out intervals',d:'10 rounds: 30 s all-out / 90 s easy',timer:{type:'int',rounds:10,work:30,rest:90}},C:{t:'Circuit',d:'4 rounds: 300 m row, 12 swings, 10 DB push press, 40 m carry, 10 burpees'}}];
 const CV={"Rowing Machine":"7EQJFjM4Vs8","Kettlebell Swing":"bDCeXbMJVNs","Goblet Squat":"7-80HiXX1K8","Farmer's Carry":"1uOs1hP3u4A","Dumbbell Thruster":"UipBcISeiGU","Dumbbell Push Press":"sElIkjcfyNY","Burpee":"qLBImHhCXSw","Brisk Walk":"gknH0pQwohc"};
 for(const k in CV)if(!VIDEOS[k])VIDEOS[k]=CV[k];
-const CMOVES=[{A:['Rowing Machine'],B:['Rowing Machine'],C:['Brisk Walk']},{A:['Rowing Machine'],B:['Rowing Machine'],C:['Kettlebell Swing','Goblet Squat',"Farmer's Carry",'Rowing Machine']},{A:['Rowing Machine'],B:['Rowing Machine'],C:['Rowing Machine','Kettlebell Swing','Dumbbell Thruster',"Farmer's Carry"]},{A:['Rowing Machine'],B:['Rowing Machine'],C:['Rowing Machine','Kettlebell Swing','Dumbbell Push Press',"Farmer's Carry",'Burpee']}];
+const RM='Rowing Machine',CMOVES=[{A:[[RM,'20 min easy pace']],B:[[RM,'6 rounds · 1 min hard / 2 min easy']],C:[['Brisk Walk','30-40 min']]},
+ {A:[[RM,'25 min easy pace']],B:[[RM,'8 rounds · 1 min hard / 1.5 min easy']],C:[['Kettlebell Swing','10 reps'],['Goblet Squat','10 reps'],["Farmer's Carry",'40 m'],[RM,'250 m']]},
+ {A:[[RM,'30 min easy pace']],B:[[RM,'5 rounds · 500 m hard, 2 min rest']],C:[[RM,'12 cal'],['Kettlebell Swing','10 reps'],['Dumbbell Thruster','8 reps'],["Farmer's Carry",'40 m']]},
+ {A:[[RM,'30-35 min easy pace']],B:[[RM,'10 rounds · 30 s all-out / 90 s easy']],C:[[RM,'300 m'],['Kettlebell Swing','12 reps'],['Dumbbell Push Press','10 reps'],["Farmer's Carry",'40 m'],['Burpee','10 reps']]}];
 const CDAY={A:'Saturday',B:'Wednesday',C:'Monday'},CWHY={A:'Easy recovery on your rest day',B:'Hard effort, away from leg days',C:'Rest day after Booty, before Push'};
 const movesOf=w=>CMOVES[Math.min(3,Math.max(0,Math.ceil(w/2)-1))];
-const mvChips=ms=>`<div class="cmoves">${ms.map(m=>`<span class="mvc"><a href="${esc(demoUrl({name:m}))}" target="_blank" rel="noopener">▶ ${esc(m)}</a><button class="edl" onclick="editDemo(decodeURIComponent('${encodeURIComponent(m)}'))">✎</button></span>`).join('')}</div>`;
+const mvChips=ms=>`<div class="cmoves">${ms.map(([m,det])=>{const e={name:m};return `<div class="exrow">${thumbLink(e)}<div class="grow">${nameLink(e)}<small>${esc(det)}</small></div><button class="edl" onclick="editDemo(decodeURIComponent('${encodeURIComponent(m)}'))">✎ Edit</button></div>`}).join('')}</div>`;
 let condWeek=null;
 function cst(){S.cond||={start:today(),done:{},tests:[]};S.cond.done||={};S.cond.tests||=[];return S.cond}
 function curCondWeek(){const c=cst(),d=Math.floor((new Date(today()+'T12:00')-new Date(c.start+'T12:00'))/864e5);return Math.floor(d/7)+1}
