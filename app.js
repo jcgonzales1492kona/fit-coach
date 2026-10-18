@@ -82,8 +82,8 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  <div class="datebar"><button onclick="shiftDay(-1)">‹</button><b>${viewDate===today()?'Today':new Date(viewDate+'T12:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</b><button onclick="shiftDay(1)">›</button></div>
  <div class="card rings">${ring(t.kcal,g.kcal,'#22c55e','Calories','')}${ring(t.p,g.p,'#3b82f6','Protein','g')}${ring(t.c,g.c,'#f59e0b','Carbs','g')}${ring(t.f,g.f,'#a855f7','Fat','g')}</div>
  <p class="muted center">${Math.max(0,Math.round(g.kcal-t.kcal))} kcal · ${Math.max(0,Math.round(g.p-t.p))}g protein left</p>
- <div class="card"><input id="fq" placeholder="🔍 Search foods (e.g. chicken, rice)…" oninput="searchFood()" autocomplete="off"><div id="fres"></div>
- ${quick.length?`<h4>Quick add</h4><div class="chips">${quick.map(f=>`<button class="chip" onclick="pickFood('${f.id}')">${S.favs.includes(f.id)?'★ ':''}${esc(f.name)}</button>`).join('')}</div>`:''}
+ <div class="card"><div class="inl fsr"><input id="fq" placeholder="🔍 Search foods…" oninput="searchFood()" autocomplete="off"><button class="btn sec scanb" onclick="scanOpen()" aria-label="Scan barcode"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5h2v14H3zm3 0h1v14H6zm2 0h2v14H8zm3 0h1v14h-1zm3 0h2v14h-2zm3 0h1v14h-1zm2 0h2v14h-2z"/></svg>Scan barcode</button></div><div id="fres"></div>
+ ${quick.length?`<h4>Quick add</h4><div class="chips">${quick.map(f=>`<button class="chip" onclick="pickFood('${f.id}')">${S.favs.includes(f.id)?'★ ':''}${esc(f.name)}${f.barcode?'<i class="sbadge">Scanned</i>':''}</button>`).join('')}</div>`:''}
  <button class="link" onclick="customFoodForm()">+ Create custom food</button></div>
  <div class="card"><h3>Logged</h3>${entries.length?entries.map((e,i)=>`<div class="row"><div><b>${esc(e.name)}</b><small>${e.g}g · P${r1(e.p)} C${r1(e.c)} F${r1(e.f)}</small></div><div class="rt">${Math.round(e.kcal)}<button class="x" onclick="delEntry(${i})">✕</button></div></div>`).join(''):'<p class="muted">Nothing logged yet.</p>'}</div>
  <div class="card"><h3>Body weight</h3><div class="inl"><input id="bw" type="number" step="0.1" inputmode="decimal" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div>
@@ -92,11 +92,11 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
 const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
 function shiftDay(n){const d=new Date(viewDate+'T12:00');d.setDate(d.getDate()+n);viewDate=d.toLocaleDateString('en-CA');renderFood()}
 function searchFood(){const q=$('#fq').value.toLowerCase().trim();if(!q){$('#fres').innerHTML='';return}
- const words=q.split(/\s+/),res=allFoods().filter(f=>words.every(w=>f.name.toLowerCase().includes(w))).slice(0,15);
- $('#fres').innerHTML=res.map(f=>`<div class="row tap" onclick="pickFood('${f.id}')"><div><b>${esc(f.name)}</b><small>per 100g · P${f.p} C${f.c} F${f.f}</small></div><div class="rt">${f.kcal}</div></div>`).join('')||'<p class="muted">No match — create a custom food.</p>'}
-function pickFood(id){const f=foodById(id),last=Object.values(S.log).flat().reverse().find(e=>e.fid===id);
- modal(`<h3>${esc(f.name)}</h3><p class="muted">${f.kcal} kcal · P${f.p} C${f.c} F${f.f} per 100g</p>
- <label>Amount (grams)<input id="fg" type="number" inputmode="decimal" value="${last?last.g:100}" oninput="prevFood('${id}')"></label><div id="fprev" class="muted"></div>
+ const words=q.split(/\s+/),res=allFoods().filter(f=>{const h=(f.name+' '+(f.brand||'')).toLowerCase();return words.every(w=>h.includes(w))}).slice(0,15);
+ $('#fres').innerHTML=res.map(f=>`<div class="row tap" onclick="pickFood('${f.id}')"><div><b>${esc(f.name)}</b><small>per 100g · P${f.p} C${f.c} F${f.f}${f.barcode?' · <i class="sbadge">Scanned</i>':''}</small></div><div class="rt">${f.kcal}</div></div>`).join('')||'<p class="muted">No match. Scan it or create a custom food.</p>'}
+function pickFood(id,g0){const f=foodById(id),last=Object.values(S.log).flat().reverse().find(e=>e.fid===id);
+ modal(`<h3>${esc(f.name)}</h3>${f.barcode?`<p class="muted"><i class="sbadge">Scanned</i> ${f.brand?esc(f.brand)+' · ':''}${esc(f.barcode)}</p>`:''}<p class="muted">${f.kcal} kcal · P${f.p} C${f.c} F${f.f} per 100g</p>
+ <label>Amount (grams)<input id="fg" type="number" inputmode="decimal" value="${g0||(last?last.g:100)}" oninput="prevFood('${id}')"></label><div id="fprev" class="muted"></div>
  <div class="inl"><button class="btn" onclick="logFood('${id}')">Add to log</button><button class="btn sec" onclick="toggleFav('${id}')">${S.favs.includes(id)?'★ Unfavorite':'☆ Favorite'}</button></div>`);prevFood(id)}
 function prevFood(id){const f=foodById(id),g=+$('#fg').value||0;$('#fprev').textContent=`${Math.round(f.kcal*g/100)} kcal · P${r1(f.p*g/100)} C${r1(f.c*g/100)} F${r1(f.f*g/100)}`}
 function logFood(id){const f=foodById(id),g=+$('#fg').value;if(!g)return;const k=g/100;
@@ -104,11 +104,12 @@ function logFood(id){const f=foodById(id),g=+$('#fg').value;if(!g)return;const k
  S.recents=[id,...S.recents.filter(x=>x!==id)].slice(0,15);save();closeModal();renderFood()}
 function toggleFav(id){S.favs=S.favs.includes(id)?S.favs.filter(x=>x!==id):[id,...S.favs];save();closeModal();renderFood()}
 function delEntry(i){S.log[viewDate].splice(i,1);save();renderFood()}
-function customFoodForm(){modal(`<h3>Custom food (per 100g)</h3><label>Name<input id="cn"></label><div class="grid4">
+function customFoodForm(n0,bc0){modal(`<h3>Custom food (per 100g)</h3>${bc0?`<p class="muted">Barcode ${esc(bc0)}. Copy the per 100 g values from the label.</p><input id="cbc" type="hidden" value="${esc(bc0)}">`:''}<label>Name<input id="cn" value="${esc(n0||'')}"></label><div class="grid4">
  <label>kcal<input id="ck" type="number"></label><label>Protein<input id="cp" type="number"></label><label>Carbs<input id="cc" type="number"></label><label>Fat<input id="cf" type="number"></label></div>
  <button class="btn" onclick="saveCustom()">Save</button>`)}
-function saveCustom(){const n=$('#cn').value.trim();if(!n)return;const f={id:'c'+Date.now(),name:n,kcal:+$('#ck').value||0,p:+$('#cp').value||0,c:+$('#cc').value||0,f:+$('#cf').value||0,custom:1};
- S.custom.push(f);save();closeModal();pickFood(f.id)}
+function saveCustom(){const n=$('#cn').value.trim();if(!n)return;const bc=$('#cbc')?$('#cbc').value:'',old=bc&&S.custom.find(x=>x.barcode===bc);
+ const f=Object.assign(old||{id:'c'+Date.now()},{name:n,kcal:+$('#ck').value||0,p:+$('#cp').value||0,c:+$('#cc').value||0,f:+$('#cf').value||0,custom:1},bc?{barcode:bc}:{});
+ if(!old)S.custom.push(f);save();closeModal();pickFood(f.id)}
 function addWeight(){const w=+$('#bw').value;if(!w)return;S.weights=S.weights.filter(x=>x.d!==today());S.weights.push({d:today(),w});S.weights.sort((a,b)=>a.d<b.d?-1:1);save();renderFood()}
 function drawWeight(){const W=S.weights.slice(-60),tr=W.map((_,i)=>r1(avg(W.slice(Math.max(0,i-6),i+1).map(x=>x.w))));
  mkChart('wchart','line',W.map(x=>x.d.slice(5)),[{label:'Weight',data:W.map(x=>x.w),borderColor:'#94a3b8',pointRadius:2,showLine:false},{label:'Trend',data:tr,borderColor:'#22c55e',pointRadius:0,tension:.3}])}
@@ -314,7 +315,7 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 
 /* ---------- modal ---------- */
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
-function closeModal(){$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
+function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
