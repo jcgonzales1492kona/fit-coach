@@ -55,7 +55,7 @@ async function scanLookup(code,fmt){const codes=scanCodes(code,fmt),run=++scanSt
  const local=S.custom.find(f=>f.barcode&&codes.includes(f.barcode));if(local){toast(local.name+' is already in your foods.',3000);pickFood(local.id,local.serving||0);return}
  modal(`<h3>Scan barcode</h3><p id="bcmsg" class="muted">Looking up ${esc(code)}...</p>`);
  let p=null,hit=code,net=false;
- for(const c of codes){try{const r=await fetch('https://world.openfoodfacts.org/api/v2/product/'+c+'.json?fields=product_name,brands,nutriments,serving_size,serving_quantity');
+ for(const c of codes){try{const r=await fetch('https://world.openfoodfacts.org/api/v2/product/'+c+'.json?fields=product_name,brands,nutriments,serving_size,serving_quantity,categories_tags');
    if(r.ok){const j=await r.json();if(j.status===1&&j.product){p=j.product;hit=c;break}}else if(r.status!==404)net=true}catch(e){net=true}}
  if(run!==scanSt.run)return;
  if(!p){scanSt.last={code,name:''};scanFail(code,net?`Could not reach Open Food Facts. Check your connection and try again, or enter the food yourself.`:`No product found for barcode ${code}.`);return}
@@ -63,10 +63,35 @@ async function scanLookup(code,fmt){const codes=scanCodes(code,fmt),run=++scanSt
  const name=(p.product_name||'').trim()||('Product '+hit),brand=(p.brands||'').split(',').map(x=>x.trim()).filter(Boolean).join(', '),b1=brand.split(',')[0];
  if(kc==null){scanSt.last={code:hit,name:b1&&!name.toLowerCase().includes(b1.toLowerCase())?name+' ('+b1+')':name};scanFail(code,`Found ${name}${brand?' by '+brand:''}, but it has no nutrition info.`);return}
  const sv=scanNum(p.serving_quantity),g=sv&&sv>0&&sv<5000?r1(sv):0;
- const vals={name,brand,kcal:Math.round(kc),p:r1(scanNum(n.proteins_100g)||0),c:r1(scanNum(n.carbohydrates_100g)||0),f:r1(scanNum(n.fat_100g)||0),barcode:hit,serving:g,custom:1,scanned:1};
- const old=S.custom.find(f=>f.barcode===hit),f=Object.assign(old||{id:'c'+Date.now()},vals);if(!old)S.custom.push(f);save();
+ const vals={name,brand,kcal:Math.round(kc),p:r1(scanNum(n.proteins_100g)||0),c:r1(scanNum(n.carbohydrates_100g)||0),f:r1(scanNum(n.fat_100g)||0),barcode:hit,serving:g,custom:1,scanned:1,
+  src:{size:(p.serving_size||'').trim(),q:g||null},flag:scanFlag(p,n,kc,g)};
+ const old=S.custom.find(f=>f.barcode&&(f.barcode===hit||codes.includes(f.barcode)));if(old&&old.corrected){toast(old.name+' is already in your foods.',3000);pickFood(old.id,old.serving||0);return}
+ const f=Object.assign(old||{id:'c'+Date.now()},vals);if(!old)S.custom.push(f);save();
  toast(`Saved ${name}${b1&&!name.toLowerCase().includes(b1.toLowerCase())?' ('+b1+')':''} to your foods.`,3000);pickFood(f.id,g||100)}
 function scanFail(code,msg){modal(`<h3>Scan barcode</h3><p class="bcfail">${esc(msg)}</p><p class="muted">Barcode ${esc(code)}</p>
  <button class="btn wide" onclick="scanCreate()">Create custom food</button><button class="btn sec wide" onclick="scanOpen()">Scan again</button>`)}
 function scanCreate(){const l=scanSt.last||{};customFoodForm(l.name||'',l.code||'')}
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&scanSt.stream){scanStop();scanMsg('Camera paused.');const b=$('#bccam');if(b)b.hidden=false;const v=$('#bcv');if(v)v.hidden=true}});
+/* Open Food Facts sanity check: per-serving numbers entered as per-100 g, or a food type that is often mislabeled */
+const SCAN_RISKY=/creamer|\boils?\b|sauce|dressing/i;
+function scanFlag(p,n,kc,sv){const txt=(p.product_name||'')+' '+(p.categories_tags||[]).join(' ');
+ const same=['energy-kcal','proteins','carbohydrates','fat'].every(k=>n[k+'_serving']==null||n[k+'_100g']==null||Math.abs(+n[k+'_serving']-+n[k+'_100g'])<0.01)&&n['energy-kcal_serving']!=null;
+ return(kc<100&&sv>=5&&Math.abs(sv-100)>1&&same)||SCAN_RISKY.test(txt.replace(/-/g,' '))?1:0}
+/* Fix from label: per-serving values -> per 100 g */
+function fixLabelForm(id){const f=foodById(id);if(!f)return;const sq=(f.src&&f.src.q)||f.serving||'';
+ modal(`<h3>Fix from label</h3><p class="muted">${esc(f.name)}. Enter what the label says for one serving. mL counts as grams.</p>
+ <label>Serving size (g or mL)<input id="flS" type="number" inputmode="decimal" value="${sq}" oninput="fixLabelPrev()"></label>
+ <div class="grid4"><label>kcal<input id="flK" type="number" inputmode="decimal" oninput="fixLabelPrev()"></label><label>Protein<input id="flP" type="number" inputmode="decimal" oninput="fixLabelPrev()"></label><label>Carbs<input id="flC" type="number" inputmode="decimal" oninput="fixLabelPrev()"></label><label>Fat<input id="flF" type="number" inputmode="decimal" oninput="fixLabelPrev()"></label></div>
+ <p id="flPrev" class="muted">Now: ${f.kcal} kcal · P${f.p} C${f.c} F${f.f} per 100g</p><button class="btn" onclick="fixLabelSave('${id}')">Save per 100 g values</button>`)}
+function fixLabelVals(){const s=+$('#flS').value;if(!(s>0))return null;const k=100/s,v=x=>+$(x).value||0;
+ return{kcal:Math.round(v('#flK')*k),p:r1(v('#flP')*k),c:r1(v('#flC')*k),f:r1(v('#flF')*k)}}
+function fixLabelPrev(){const v=fixLabelVals();if(v)$('#flPrev').textContent=`Per 100 g: ${v.kcal} kcal · P${v.p} C${v.c} F${v.f}`}
+function fixLabelApply(f,v){Object.assign(f,v,{corrected:1,flag:0});let n=0;
+ for(const d in S.log)(S.log[d]||[]).forEach(e=>{if(e.fid===f.id){const k=e.g/100;Object.assign(e,{name:f.name,kcal:f.kcal*k,p:f.p*k,c:f.c*k,f:f.f*k});n++}});return n}
+function fixLabelSave(id){const f=S.custom.find(x=>x.id===id),v=fixLabelVals();if(!f||!v){toast('Enter the serving size in grams or mL.',3000);return}
+ const cnt=Object.values(S.log).flat().filter(e=>e.fid===id).length;
+ Object.assign(f,v,{corrected:1,flag:0});if(cnt&&confirm(`Also update ${cnt} logged entr${cnt>1?'ies':'y'} of ${f.name} with the new numbers?`))fixLabelApply(f,v);
+ save();toast(`Saved ${f.name}: ${v.kcal} kcal per 100 g.`,3000);if(!$('#food').hidden)renderFood();pickFood(id)}
+/* one-time data fix: Chobani cookie dough creamer was listed per serving on Open Food Facts */
+(function scanMigrate(){S.mig||={};if(S.mig.chobani)return;const f=S.custom.find(x=>x.barcode==='0818290015075'||x.barcode==='818290015075');
+ S.mig.chobani=1;if(f&&!f.corrected){fixLabelApply(f,{kcal:267,p:0,c:40,f:10});f.src||={size:'1 Tbsp (15 mL)',q:15};save();if(!$('#food').hidden)renderFood();setTimeout(()=>toast('Fixed Chobani cookie dough creamer from its label',6000),300)}else save()})();
