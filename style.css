@@ -89,3 +89,4 @@ input,select{box-sizing:border-box;max-width:100%;min-width:0}input[type=date]{-
 .gsug{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--c2);border-radius:14px;padding:10px 12px;margin:8px 0}.gsug b{font-size:13px}.gsug small{display:block;color:var(--m);font-size:12px;margin-top:2px;line-height:1.4}.gsug .btn{flex:none}
 .gview{margin-top:10px}.g2{grid-template-columns:1fr 1fr}
 .mxres{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0;text-align:center}.mxres div{background:var(--c2);border-radius:12px;padding:8px 4px}.mxres small{display:block;color:var(--m);font-size:10px}.mxres b{font-size:15px}
+.gneu{color:#d1d1d6}.gnow{color:#fff;font-weight:600}
