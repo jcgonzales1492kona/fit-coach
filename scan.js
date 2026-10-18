@@ -5,7 +5,10 @@ const scanSt={stream:null,run:0,det:undefined,lib:null,last:null,busy:false};
 function scanLib(){if(window.ZXingWASM)return Promise.resolve(window.ZXingWASM);
  return scanSt.lib||=new Promise((res,rej)=>{const s=document.createElement('script');s.src=SCAN_LIB;s.crossOrigin='anonymous';
   s.onload=()=>window.ZXingWASM?res(window.ZXingWASM):rej(new Error('lib'));s.onerror=()=>{scanSt.lib=null;rej(new Error('lib'))};document.head.appendChild(s)})}
-async function scanZX(){const zx=await scanLib();try{await zx.prepareZXingModule({fireImmediately:true});return zx}catch(e){try{zx.purgeZXingModule()}catch(_){}throw e}}
+const SCAN_WASM='https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.5/dist/reader/zxing_reader.wasm';
+async function scanZX(){const zx=await scanLib();let err;
+ for(const host of[SCAN_WASM,null]){try{await zx.prepareZXingModule({overrides:host?{locateFile:(p,pre)=>p.endsWith('.wasm')?host:pre+p}:{},fireImmediately:true});return zx}catch(e){err=e;try{zx.purgeZXingModule()}catch(_){}}}
+ throw err}
 async function scanNative(){if(scanSt.det!==undefined)return scanSt.det;scanSt.det=null;
  try{if('BarcodeDetector'in window){const ok=(await BarcodeDetector.getSupportedFormats()).filter(f=>SCAN_NATIVE.includes(f));if(ok.length)scanSt.det=new BarcodeDetector({formats:ok})}}catch(e){}
  return scanSt.det}
