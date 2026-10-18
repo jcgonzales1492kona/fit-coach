@@ -13,39 +13,59 @@ function goalState(){S.goals||={};return S.goals}
 /* 7-day moving average by calendar day (entry plus any entries in the 6 days before it) */
 function wMA(){const W=[...S.weights].sort((a,b)=>a.d<b.d?-1:1).map(x=>({d:x.d,n:gDay(x.d),w:+x.w}));
  return W.map((x,i)=>{const win=W.filter(y=>y.n<=x.n&&y.n>x.n-7);return{...x,ma:win.reduce((a,y)=>a+y.w,0)/win.length}})}
-function goalTrend(M){if(!M.length)return null;const last=M.at(-1).n,P=M.filter(x=>x.n>last-28);
- if(P.length<4||last-P[0].n<10)return null;const k=P.length,mx=P.reduce((a,x)=>a+x.n,0)/k,my=P.reduce((a,x)=>a+x.ma,0)/k;
- const sxx=P.reduce((a,x)=>a+(x.n-mx)**2,0),sxy=P.reduce((a,x)=>a+(x.n-mx)*(x.ma-my),0);
- return{rate:-(sxy/sxx)*7,span:last-P[0].n,count:k}}
+const GOAL_MIN_DAYS=14,GOAL_MIN_N=7;
+/* Regression on the 7-day average over the last 28 days. While real data spans under 14 days, the coach start weight
+   (if applied) is added as the first point so one water spike cannot drive the line. Needs 7 points over 14+ days. */
+function goalTrend(M,G){if(!M.length)return null;const last=M.at(-1).n,P=M.filter(x=>x.n>last-28).map(x=>({n:x.n,y:x.ma}));
+ let anchored=false;const a=G&&G.start?{n:gDay(G.start.d),y:+G.start.w}:null;
+ if(a&&last-M[0].n<GOAL_MIN_DAYS&&a.n<P[0].n&&a.n>last-28){P.unshift(a);anchored=true}
+ const span=last-P[0].n,k=P.length,real=k-(anchored?1:0);if(k<GOAL_MIN_N||span<GOAL_MIN_DAYS)return{early:true,count:k,real,span,anchored};
+ const mx=P.reduce((s,x)=>s+x.n,0)/k,my=P.reduce((s,x)=>s+x.y,0)/k,sxx=P.reduce((s,x)=>s+(x.n-mx)**2,0),sxy=P.reduce((s,x)=>s+(x.n-mx)*(x.y-my),0);
+ return{rate:-(sxy/sxx)*7,span,count:k,real,anchored}}
 function goalPlan(){const g=S.settings;return g.tdee?{rate:(g.tdee-g.kcal)*7/3500*gLb(),def:g.tdee-g.kcal}:null}
-function goalCalc(){const M=wMA(),G=goalState(),tr=goalTrend(M),pl=goalPlan(),now=gDay(today()),cur=M.length?M.at(-1).ma:null,curN=M.length?M.at(-1).n:now;
- const flat=0.1*gLb(),useTr=!!tr,rate=tr?tr.rate:(pl?pl.rate:null),moving=rate!=null&&rate>flat;
+function goalCalc(){const M=wMA(),G=goalState(),T=goalTrend(M,G),tr=T&&!T.early?T:null,early=!tr,pl=goalPlan(),now=gDay(today());
+ const last=M.length?M.at(-1):null,cur=last?last.ma:null,lastW=last?last.w:null,curN=last?last.n:now,flat=0.1*gLb();
+ const anc=G.start?{n:gDay(G.start.d),w:+G.start.w}:null,startW=anc?anc.w:(M.length?M[0].w:null);
+ // early: plan rate only, projected from the coach start when it is recent, else from the 7-day average
+ const fromAnc=early&&anc&&last&&anc.n<=curN&&curN-anc.n<=28&&(!M.length||curN-M[0].n<GOAL_MIN_DAYS);
+ const origin=cur==null?null:fromAnc?{n:anc.n,w:anc.w}:{n:curN,w:cur};
+ const planOK=pl&&pl.rate>flat,rate=tr?tr.rate:(planOK?pl.rate:null),moving=rate!=null&&rate>flat;
+ const gentle=!!tr&&!moving&&lastW!=null&&startW!=null&&lastW<=startW;
  const goals=['m1','m6','lt'].filter(k=>G[k]&&G[k].w).map(k=>{const g=G[k],tN=g.date?gDay(g.date):null,o={k,g,tN};
-  if(cur==null)return o;o.rem=cur-g.w;if(o.rem<=0){o.reached=1;return o}
-  if(moving){o.projN=Math.round(curN+o.rem/(rate/7));if(tN)o.onTrack=o.projN<=tN}
-  if(pl&&pl.rate>flat)o.planN=Math.round(curN+o.rem/(pl.rate/7));
-  if(tN){const wk=(tN-now)/7;o.past=tN<now;o.need=wk>0?o.rem/wk:null;o.fast=o.need!=null&&o.need>1.5*gLb()}
+  if(cur==null)return o;o.rem=cur-g.w;o.remToday=lastW-g.w;if(o.rem<=0){o.reached=1;return o}
+  if(planOK){const on=origin.w-g.w;o.planN=Math.round(on<=0?curN:origin.n+on/(pl.rate/7))}
+  if(tr&&moving){o.projN=Math.round(curN+o.rem/(rate/7));if(tN)o.onTrack=o.projN<=tN}
+  if(tN){const wk=(tN-now)/7,r=Math.max(0,Math.min(o.rem,o.remToday));o.past=tN<now;o.need=wk>0?r/wk:null;o.fast=o.need!=null&&o.need>1.5*gLb()}
   return o});
- let recal=null;if(tr&&tr.span>=14){const e=Math.round((S.settings.kcal+tr.rate/gLb()*500)/10)*10;if(e>=1200&&e<=4500)recal=e}
- return{M,tr,pl,rate,useTr,moving,cur,curN,now,goals,recal}}
+ let recal=null;if(tr){const e=Math.round((S.settings.kcal+tr.rate/gLb()*500)/10)*10;if(e>=1200&&e<=4500)recal=e}
+ return{M,T,tr,early,pl,rate,useTr:!!tr,moving,gentle,cur,lastW,last,curN,now,goals,recal,origin,anc,startW}}
 function goalCard(){const g=S.settings,u=gU(),G=goalState(),R=goalCalc();let h='<div class="card goals"><h3>Goals</h3>';
  const coachDiff=['m1','m6','lt'].some(k=>!G[k]||Math.abs(G[k].w-GOAL_COACH[k].w*gLb())>0.05);
- if(G.start)h+=`<p class="muted">Started at ${gNum(G.start.w)} ${u} on ${gFmt(gDay(G.start.d))}${R.cur!=null?` · ${R.cur<=G.start.w?'down':'up'} ${gNum(Math.abs(G.start.w-R.cur))} ${u} so far`:''}</p>`;
+ const parts=[];if(G.start)parts.push(`Start ${gNum(G.start.w)} ${u} on ${gFmt(gDay(G.start.d))}`);
+ if(R.last){parts.push(`${R.last.n===R.now?'Today':'Latest ('+gFmt(R.last.n)+')'} ${gNum(R.lastW)} ${u}`);parts.push(`7-day average ${gNum(R.cur)} ${u}`)}
+ if(parts.length)h+=`<p class="gl gnow">${parts.join(' · ')}</p>`;
  // rates
- if(R.tr)h+=`<p class="gl"><b>Your trend:</b> ${R.tr.rate>0.1*gLb()?`losing ${gNum(R.tr.rate)} ${u}/week`:R.tr.rate<-0.1*gLb()?`up ${gNum(-R.tr.rate)} ${u}/week`:'holding steady'} over the last ${R.tr.span+1} days (7-day average).</p>`;
- else h+=`<p class="muted">${R.cur==null?'Log your weight above to see projections.':'Log a few more weigh-ins to see your real trend.'}</p>`;
+ if(R.tr)h+=`<p class="gl"><b>Your trend:</b> ${R.tr.rate>0.1*gLb()?`losing ${gNum(R.tr.rate)} ${u}/week`:R.tr.rate<-0.1*gLb()?`up ${gNum(-R.tr.rate)} ${u}/week`:'holding steady'} over the last ${R.tr.span+1} days (7-day average${R.tr.anchored?', counting your start weight':''}).</p>`;
+ else if(R.cur==null)h+='<p class="muted">Log your weight above to see projections.</p>';
+ else h+=`<p class="muted">Log a few more weigh-ins to see your real trend. It shows after ${GOAL_MIN_DAYS} days and ${GOAL_MIN_N} weigh-ins. So far: ${R.T.count} over ${R.T.span+1} day${R.T.span?'s':''}${R.T.anchored?', counting your start':''}.</p>`;
  if(R.pl)h+=`<p class="gl"><b>Your plan:</b> ${R.pl.def>0?`about ${gNum(R.pl.rate)} ${u}/week (${g.tdee} maintenance minus ${g.kcal} target = ${R.pl.def} kcal/day)`:`no deficit (target ${g.kcal} is at or above maintenance ${g.tdee})`}. Realistic range: ${u==='kg'?'0.35 to 0.45 kg':'0.75 to 1 lb'}/week.</p>`;
  else h+=`<p class="muted">Add your maintenance calories in Settings to see your plan rate.</p>`;
  const iv=goalIntake();if(iv&&g.tdee)h+=`<p class="muted">If you hit your calories: your last ${iv.days} logged day${iv.days>1?'s':''} averaged ${iv.kcal} kcal, about ${gNum(Math.max(0,(g.tdee-iv.kcal)*7/3500*gLb()))} ${u}/week at ${g.tdee} maintenance.</p>`;
  if(R.recal)h+=`<div class="gsug"><div><b>Real maintenance looks like about ${R.recal} kcal</b><small>From your ${R.tr.span+1}-day trend, assuming you eat about ${g.kcal} a day.</small></div>${Math.abs(R.recal-(g.tdee||0))>=20?`<button class="btn sm" onclick="goalUseTdee(${R.recal},'trend')">Use this</button>`:'<span class="pill">In use</span>'}</div>`;
  // goals
  h+=['m1','m6','lt'].map(k=>{const o=R.goals.find(x=>x.k===k);if(!o)return `<div class="grow1"><div><b>${GOAL_NAMES[k]}</b><small>Not set</small></div><button class="btn sec sm" onclick="goalForm('${k}')">Set</button></div>`;
-  let s='';const by=o.tN?` by ${gFmt(o.tN)}`:'';
+  let s='';const by=o.tN?` by ${gFmt(o.tN)}`:'',onPlan=o.planN?` On plan you'd hit it around <b>${gFmt(o.planN)}</b>.`:'';
+  const today_=R.last&&R.last.n===R.now?"today's weigh-in":'your latest weigh-in';
   if(R.cur==null)s='Log your weight to see your projection.';
-  else if(o.reached)s=`<span class="gok">Reached. Nice work!</span>`;
-  else{s=`${gNum(o.rem)} ${u} to go. `;
-   if(R.moving)s+=`At ${R.useTr?'your current pace':'your plan pace'} you'd get there around <b>${gFmt(o.projN)}</b>. `+(o.tN?(o.onTrack?'<span class="gok">On track.</span>':`<span class="gwarn">About ${Math.max(1,Math.round((o.projN-o.tN)/7))} week${Math.round((o.projN-o.tN)/7)>1?'s':''} behind.</span>`):'');
-   else s+=`<span class="gwarn">At this pace you won't reach it.</span> Try logging every bite for a week and check your maintenance number. `+(o.planN?`On plan you'd get there around ${gFmt(o.planN)}.`:'');
+  else if(o.reached)s=`<span class="gok">Reached by your 7-day average. Nice work!</span>`;
+  else{
+   if(o.remToday<=0)s=`You hit ${gNum(o.g.w)} on ${today_}! Your 7-day average is ${gNum(R.cur)}, so ${gNum(o.rem)} ${u} more by average. `;
+   else if(Math.abs(o.remToday-o.rem)<0.05)s=`${gNum(o.rem)} ${u} to go. `;
+   else s=`${gNum(o.remToday)} ${u} to go from ${today_} (${gNum(o.rem)} by 7-day average). `;
+   if(R.early)s+=`<span class="gneu">Too early to judge, keep weighing in.</span>${onPlan}`;
+   else if(R.moving)s+=`At your current pace you'd get there around <b>${gFmt(o.projN)}</b>. `+(o.tN?(o.onTrack?'<span class="gok">On track.</span>':`<span class="gwarn">About ${Math.max(1,Math.round((o.projN-o.tN)/7))} week${Math.round((o.projN-o.tN)/7)>1?'s':''} behind.</span>`):'');
+   else if(R.gentle)s+=`<span class="gneu">Your average is up a little, but ${today_} is at or below your ${gNum(R.startW)} ${u} start, so this is likely water. Stick with the plan.</span>${onPlan}`;
+   else s+=`<span class="gwarn">At this pace you won't reach it.</span> Try logging every bite for a week and check your maintenance number.${onPlan}`;
    if(o.past)s+=' The target date has passed, so set a new one when you are ready.';
    else if(o.fast)s+=` <span class="gwarn">Faster than your coach recommends (needs ${gNum(o.need)} ${u}/week).</span>`}
   return `<div class="grow1"><div class="grow"><b>${GOAL_NAMES[k]}: ${gNum(o.g.w)} ${u}${by}</b><small>${s}</small></div><button class="btn sec sm" onclick="goalForm('${k}')">Edit</button></div>`}).join('');
@@ -74,15 +94,18 @@ function drawWeight(){const R=goalCalc(),M=R.M.slice(-60),u=gU(),L=gLb();if(!M.l
  let end=R.curN+35;const ends=gs.map(o=>o.tN||o.projN||o.planN).filter(Boolean);
  if(view==='1m'){const m1=R.goals.find(o=>o.k==='m1');end=Math.max(end,m1&&m1.tN?m1.tN+3:0)}else end=Math.max(end,...ends.map(n=>n+7));
  end=Math.min(end,R.curN+730);
- if(R.cur!=null&&R.pl&&R.pl.rate>0){const lo=0.75*L,hi=1*L,d=end-R.curN;
-  ds.push({label:'_hi',data:[{x:R.curN,y:R.cur},{x:end,y:R.cur-hi*d/7}],borderColor:'transparent',pointRadius:0,fill:false},
-   {label:'Expected range',data:[{x:R.curN,y:R.cur},{x:end,y:R.cur-lo*d/7}],borderColor:'transparent',backgroundColor:'#22c55e1f',pointRadius:0,fill:'-1'})}
- if(R.cur!=null&&R.moving){const d=end-R.curN;ds.push({label:R.useTr?'Projection (trend)':'Projection (plan)',data:[{x:R.curN,y:R.cur},{x:end,y:R.cur-R.rate*d/7}],borderColor:'#ffffff',borderDash:[6,5],borderWidth:1.5,pointRadius:0})}
+ const O=R.origin;
+ if(O&&R.pl&&R.pl.rate>0){const lo=0.75*L,hi=1*L,d=end-O.n;
+  ds.push({label:'_hi',data:[{x:O.n,y:O.w},{x:end,y:O.w-hi*d/7}],borderColor:'transparent',pointRadius:0,fill:false},
+   {label:'Expected range',data:[{x:O.n,y:O.w},{x:end,y:O.w-lo*d/7}],borderColor:'transparent',backgroundColor:'#22c55e1f',pointRadius:0,fill:'-1'})}
+ if(O&&R.moving){const P0=R.useTr?{n:R.curN,w:R.cur}:O,d=end-P0.n;ds.push({label:R.useTr?'Projection (trend)':'Projection (plan)',data:[{x:P0.n,y:P0.w},{x:end,y:P0.w-R.rate*d/7}],borderColor:'#ffffff',borderDash:[6,5],borderWidth:1.5,pointRadius:0})}
+ if(R.anc&&R.anc.n>=M[0].n-28&&R.anc.n<=end)ds.push({label:'Start',data:[{x:R.anc.n,y:R.anc.w}],borderColor:'#ffffff',backgroundColor:'#121212',pointStyle:'circle',pointRadius:4,borderWidth:2,showLine:false});
  const col={m1:'#3b82f6',m6:'#f59e0b',lt:'#a855f7'};
  R.goals.filter(o=>view==='6m'||(o.tN&&o.tN<=end)).forEach(o=>{if(o.tN&&o.tN<=end)ds.push({label:GOAL_NAMES[o.k],data:[{x:o.tN,y:o.g.w}],borderColor:col[o.k],backgroundColor:col[o.k],pointStyle:'rectRot',pointRadius:6,showLine:false});
   else if(!o.tN||o.tN>end)ds.push({label:GOAL_NAMES[o.k]+(o.tN?' (later)':''),data:[{x:M[0].n,y:o.g.w},{x:end,y:o.g.w}],borderColor:col[o.k]+'99',borderDash:[2,4],borderWidth:1,pointRadius:0})});
  const ys=ds.flatMap(s=>s.data.map(p=>p.y)),ymin=Math.min(...ys),ymax=Math.max(...ys);
- mkChart('wchart','line',[],ds,{scales:{x:{type:'linear',min:M[0].n,max:end,ticks:{color:'#94a3b8',maxTicksLimit:view==='6m'?6:5,maxRotation:0,callback:v=>view==='6m'?gMon(v):gFmt(v).replace(/, \d{4}$/,'')},grid:{color:'#1e293b'}},
+ const xmin=R.anc&&R.anc.n<M[0].n&&R.anc.n>=M[0].n-28?R.anc.n:M[0].n;
+ mkChart('wchart','line',[],ds,{scales:{x:{type:'linear',min:xmin,max:end,ticks:{color:'#94a3b8',maxTicksLimit:view==='6m'?6:5,maxRotation:0,callback:v=>view==='6m'?gMon(v):gFmt(v).replace(/, \d{4}$/,'')},grid:{color:'#1e293b'}},
    y:{min:Math.floor(ymin-1),max:Math.ceil(ymax+1),ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},
   plugins:{legend:{labels:{color:'#cbd5e1',boxWidth:10,font:{size:10},filter:i=>!i.text.startsWith('_')}},tooltip:{callbacks:{title:it=>it.length?gFmt(it[0].parsed.x):'',label:c=>`${c.dataset.label}: ${gNum(c.parsed.y)} ${u}`}}}})}
 /* macro calculator (Settings) */
