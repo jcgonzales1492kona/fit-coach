@@ -84,8 +84,9 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  <p class="muted center">${Math.max(0,Math.round(g.kcal-t.kcal))} kcal · ${Math.max(0,Math.round(g.p-t.p))}g protein left</p>
  <div class="card"><div class="inl fsr"><input id="fq" placeholder="🔍 Search foods…" oninput="searchFood()" autocomplete="off"><button class="btn sec scanb" onclick="scanOpen()" aria-label="Scan barcode"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5h2v14H3zm3 0h1v14H6zm2 0h2v14H8zm3 0h1v14h-1zm3 0h2v14h-2zm3 0h1v14h-1zm2 0h2v14h-2z"/></svg>Scan barcode</button></div><div id="fres"></div>
  ${quick.length?`<h4>Quick add</h4><div class="chips">${quick.map(f=>`<button class="chip" onclick="pickFood('${f.id}')">${S.favs.includes(f.id)?'★ ':''}${esc(f.name)}${f.barcode?'<i class="sbadge">Scanned</i>':''}</button>`).join('')}</div>`:''}
+ ${mealRow()}
  <button class="link" onclick="customFoodForm()">+ Create custom food</button></div>
- <div class="card"><h3>Logged</h3>${entries.length?entries.map((e,i)=>`<div class="row"><div><b>${esc(e.name)}</b><small>${e.g}g · P${r1(e.p)} C${r1(e.c)} F${r1(e.f)}</small></div><div class="rt">${Math.round(e.kcal)}<button class="x" onclick="delEntry(${i})">✕</button></div></div>`).join(''):'<p class="muted">Nothing logged yet.</p>'}</div>
+ <div class="card"><h3>Logged</h3>${entries.length?entries.map((e,i)=>`<div class="row"><div><b>${esc(e.name)}</b><small>${e.meal?`${e.sv} serving${e.sv===1?'':'s'} · <i class="sbadge mbadge">Meal</i>`:e.g+'g'} · P${r1(e.p)} C${r1(e.c)} F${r1(e.f)}</small></div><div class="rt">${Math.round(e.kcal)}<button class="x" onclick="delEntry(${i})">✕</button></div></div>`).join(''):'<p class="muted">Nothing logged yet.</p>'}</div>
  <div class="card"><h3>Body weight</h3><div class="inl"><input id="bw" type="number" step="0.1" inputmode="decimal" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div>
  ${S.weights.length?`<p class="muted">Latest ${S.weights.at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>`:'<p class="muted">No entries yet.</p>'}</div>
  ${goalCard()}`;
@@ -94,7 +95,7 @@ const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
 function shiftDay(n){const d=new Date(viewDate+'T12:00');d.setDate(d.getDate()+n);viewDate=d.toLocaleDateString('en-CA');renderFood()}
 function searchFood(){const q=$('#fq').value.toLowerCase().trim();if(!q){$('#fres').innerHTML='';return}
  const words=q.split(/\s+/),res=allFoods().filter(f=>{const h=(f.name+' '+(f.brand||'')).toLowerCase();return words.every(w=>h.includes(w))}).slice(0,15);
- $('#fres').innerHTML=res.map(f=>`<div class="row tap" onclick="pickFood('${f.id}')"><div><b>${esc(f.name)}</b><small>per 100g · P${f.p} C${f.c} F${f.f}${f.barcode?' · <i class="sbadge">Scanned</i>':''}</small></div><div class="rt">${f.kcal}</div></div>`).join('')||'<p class="muted">No match. Scan it or create a custom food.</p>'}
+ $('#fres').innerHTML=(mealSearch(words)+res.map(f=>`<div class="row tap" onclick="pickFood('${f.id}')"><div><b>${esc(f.name)}</b><small>per 100g · P${f.p} C${f.c} F${f.f}${f.barcode?' · <i class="sbadge">Scanned</i>':''}</small></div><div class="rt">${f.kcal}</div></div>`).join(''))||'<p class="muted">No match. Scan it or create a custom food.</p>'}
 function pickFood(id,g0){const f=foodById(id),last=Object.values(S.log).flat().reverse().find(e=>e.fid===id);
  modal(`<h3>${esc(f.name)}</h3>${f.barcode?`<p class="muted"><i class="sbadge">Scanned</i> ${f.brand?esc(f.brand)+' · ':''}${esc(f.barcode)}</p>`:''}<p class="muted">${f.kcal} kcal · P${f.p} C${f.c} F${f.f} per 100g</p>${f.src&&f.src.size?`<p class="muted">Label serving: ${esc(f.src.size)}</p>`:''}${f.corrected?'<p class="muted"><i class="sbadge fixd">Fixed from label</i></p>':f.flag?`<div class="gsug lowwarn"><div><b>Numbers look low. Check against the label.</b><small>Open Food Facts sometimes lists one serving as 100 g.</small></div><button class="btn sm" onclick="fixLabelForm('${id}')">Fix from label</button></div>`:''}
  <label>Amount (grams)<input id="fg" type="number" inputmode="decimal" value="${g0||(last?last.g:100)}" oninput="prevFood('${id}')"></label><div id="fprev" class="muted"></div>
@@ -317,6 +318,7 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
 function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
+mealMigrate();
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 
