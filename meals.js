@@ -29,11 +29,11 @@ function mealPick(id){const m=mealById(id);if(!m)return;const v=mealPer(m),c=m.l
  modal(`<h3>${esc(m.name)} <i class="sbadge mbadge">Meal</i></h3><p class="muted">${v.kcal} kcal · P${v.p} C${v.c} F${v.f} per serving · recipe makes ${m.servings}</p>
  ${m.label?`<p class="muted">Using ${m.src==='cookbook'?'cookbook':'label'} numbers.${c&&c.total.kcal?` Ingredients add up to ${c.kcal} kcal · P${c.p} per serving.`:''}</p>`:m.cook?`<p class="muted">Cookbook says ${m.cook.kcal} kcal; ingredients add up to ${v.kcal}.</p>`:''}${m.note?`<p class="mnote">${esc(m.note)}</p>`:''}
  <label>Servings<div class="inl"><button class="btn sec sm" onclick="mealStep(-0.5)">−</button><input id="msv" type="number" inputmode="decimal" step="0.5" min="0.5" value="1" oninput="mealPrev('${id}')"><button class="btn sec sm" onclick="mealStep(0.5)">+</button></div></label>
- <div id="mprev" class="muted"></div><div class="inl"><button class="btn" onclick="mealLog('${id}')">Add to log</button><button class="btn sec" onclick="mealForm('${id}')">Edit meal</button></div>`);mealPrev(id)}
+ <div id="mprev" class="muted"></div>${slotPills()}<div class="inl"><button class="btn" onclick="mealLog('${id}')">Add to log</button><button class="btn sec" onclick="mealForm('${id}')">Edit meal</button></div>`);mealPrev(id)}
 function mealStep(d){const e=$('#msv'),v=Math.max(0.5,Math.round(((+e.value||0)+d)*2)/2);e.value=v;e.oninput()}
 function mealPrev(id){const m=mealById(id),v=mealPer(m),n=+$('#msv').value||0;$('#mprev').textContent=`${n} serving${n===1?'':'s'}: ${Math.round(v.kcal*n)} kcal · P${mealR1(v.p*n)} C${mealR1(v.c*n)} F${mealR1(v.f*n)}`}
 function mealLog(id){const m=mealById(id),n=+$('#msv').value;if(!m||!(n>0))return;const v=mealPer(m);
- (S.log[viewDate]||=[]).push({fid:m.id,meal:m.id,sv:n,name:m.name,g:0,kcal:v.kcal*n,p:v.p*n,c:v.c*n,f:v.f*n});save();closeModal();renderFood()}
+ (S.log[viewDate]||=[]).push({fid:m.id,meal:m.id,sv:n,name:m.name,g:0,kcal:v.kcal*n,p:v.p*n,c:v.c*n,f:v.f*n,slot:slotTake(),t:Date.now()});save();closeModal();renderFood()}
 /* new / edit form */
 function mealForm(id){const m=id&&mealById(id);mealDraft=m?structuredClone(m):{id:null,name:'',servings:1,items:[],label:null,note:''};const d=mealDraft;
  modal(`<h3>${m?'Edit meal':'New meal'}</h3><label>Name<input id="mfn" value="${esc(d.name)}" oninput="mealDraft.name=this.value"></label>
