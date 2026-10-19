@@ -150,7 +150,12 @@ Pizza, cheese|266|11|33|10
 Burrito bowl (avg)|150|9|17|5
 Ice cream vanilla|207|3.5|24|11
 Orange juice|45|0.7|10.4|0.2
-Sports drink|26|0|6.4|0`;
+Sports drink|26|0|6.4|0
+Chicken thigh, boneless skinless, raw|121|19.7|0|4.1
+White rice, dry|365|7.1|80|0.7
+Black beans, canned, drained|91|6|16.6|0.3
+Corn, canned, drained|67|2.3|14.7|0.9
+Lime juice|25|0.4|8.4|0.1`;
 const FOODS=FOODS_RAW.split('\n').map((l,i)=>{const[n,k,p,c,f]=l.split('|');return{id:'b'+i,name:n,kcal:+k,p:+p,c:+c,f:+f}});
 // exercises: name|primary muscle|type(c=compound,i=isolation)
 const EX_RAW=`Barbell Bench Press|chest|c
