@@ -19,9 +19,9 @@ function slotSum(L){return L.reduce((a,{e})=>({kcal:a.kcal+e.kcal,p:a.p+e.p,c:a.
 function slotLogCard(entries){const all=entries.map((e,i)=>({e,i}));let h='<div class="card logc"><h3>Logged</h3>';
  if(!all.length)h+='<p class="muted">Nothing logged yet.</p>';
  for(const s of SLOT_ORDER){const L=all.filter(x=>(x.e.slot||'s')===s);
-  if(!L.length){h+=`<div class="slh empty"><b>${SLOT_NAMES[s]}</b><button class="link sadd" onclick="slotAdd('${s}')">+ Add</button></div>`;continue}
-  const t=slotSum(L);h+=`<div class="slh" data-slot="${s}"><div><b>${SLOT_NAMES[s]}</b><small>${Math.round(t.kcal)} kcal · P${r1(t.p)} C${r1(t.c)} F${r1(t.f)}</small></div><button class="link sadd" onclick="slotAdd('${s}')">+ Add</button></div>`;
-  h+=L.map(({e,i})=>`<div class="row"><div class="grow"><b>${esc(e.name)}</b><small>${e.meal?`${e.sv} serving${e.sv===1?'':'s'} · <i class="sbadge mbadge">Meal</i>`:e.g+'g'} · P${r1(e.p)} C${r1(e.c)} F${r1(e.f)}</small></div><div class="rt"><button class="spill" onclick="slotMoveForm(${i})" aria-label="Move to another meal">${SLOT_NAMES[s]} ▾</button>${Math.round(e.kcal)}<button class="x" onclick="delEntry(${i})">✕</button></div></div>`).join('')}
+  if(!L.length){h+=`<div class="slh empty" data-s="${s}"><b>${SLOT_NAMES[s]}</b><button class="link sadd" onclick="slotAdd('${s}')">+ Add</button></div>`;continue}
+  const t=slotSum(L);h+=`<div class="slsec" data-s="${s}"><div class="slh" data-slot="${s}"><b>${SLOT_NAMES[s]}</b><small>${Math.round(t.kcal)} kcal · P${r1(t.p)} C${r1(t.c)} F${r1(t.f)}</small><button class="link sadd" onclick="slotAdd('${s}')" aria-label="Add to ${SLOT_NAMES[s]}">+ Add</button></div><div class="slitems">`;
+  h+=L.map(({e,i})=>`<div class="row"><div class="grow"><b>${esc(e.name)}</b><small>${e.meal?`${e.sv} serving${e.sv===1?'':'s'} · <i class="sbadge mbadge">Meal</i>`:e.g+'g'} · P${r1(e.p)} C${r1(e.c)} F${r1(e.f)}</small></div><div class="rt"><button class="spill" onclick="slotMoveForm(${i})" aria-label="Move to another meal">${SLOT_NAMES[s]} ▾</button>${Math.round(e.kcal)}<button class="x" onclick="delEntry(${i})">✕</button></div></div>`).join('')+'</div></div>'}
  const y=new Date(viewDate+'T12:00');y.setDate(y.getDate()-1);const yd=y.toLocaleDateString('en-CA'),Y=S.log[yd]||[];
  const cp=SLOT_ORDER.filter(s=>Y.some(e=>(e.slot||'s')===s));
  if(cp.length)h+=`<div class="chips scopy">${cp.map(s=>`<button class="chip" onclick="slotCopy('${s}')">Copy yesterday's ${SLOT_NAMES[s].toLowerCase()}</button>`).join('')}</div>`;
