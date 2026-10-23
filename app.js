@@ -320,7 +320,7 @@ function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hid
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 mealMigrate();slotMigrate();
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
-healthImport();
+healthImport();setTimeout(healthNudge,800);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 
 function doneSummary(name,sets,prev){const u=S.settings.unit||'lb',by={};sets.forEach(x=>(by[x.ex]||=[]).push(x));
