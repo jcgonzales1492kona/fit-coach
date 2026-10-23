@@ -1,6 +1,8 @@
 /* v28: edit logged entries, edit weigh-ins, weight from Apple Health */
 const HEALTH_URL='https://jcgonzales1492kona.github.io/fit-coach/';
 let wAll=false;
+const LAUNCH_URL=location.href,LAUNCH_T=Date.now();let healthNudged=false;
+function appMode(){return isStandalone()?'Home Screen app':'Safari (browser tab)'}
 function foodLow(f){return !!f&&!f.corrected&&(!!f.flag||(S.custom.some(x=>x.id===f.id)&&/creamer/i.test(f.name)))}
 function lowWarn(f){return `<div class="gsug lowwarn"><div><b>Numbers look low. Check against the label.</b><small>${f.barcode?'Open Food Facts sometimes lists one serving as 100 g.':'Creamer is usually well over 100 kcal per 100 g.'}</small></div><button class="btn sm" onclick="fixLabelForm('${f.id}')">Fix from label</button></div>`}
 /* ---- entry edit ---- */
@@ -47,14 +49,20 @@ function healthLog(raw,uIn,dIn){const my=S.settings.unit==='kg'?'kg':'lb',u=heal
  const old=S.weights.find(x=>x.d===d);if(old&&Math.abs(+old.w-w)<0.05)return{ok:1,same:1,w,d,msg:`${w} ${my} is already logged for ${d===today()?'today':wFmt(d)}.`};
  S.weights=S.weights.filter(x=>x.d!==d);S.weights.push({d,w});S.weights.sort((a,b)=>a.d<b.d?-1:1);save();
  return{ok:1,w,d,msg:`Logged ${w} ${my} from Health${d===today()?'':' for '+wFmt(d)}${old?` (was ${old.w})`:''}`}}
-function healthImport(){const q=new URLSearchParams(location.search);if(!q.has('w'))return;
- const r=healthLog(q.get('w'),q.get('u'),q.get('d'));
- ['w','d','u'].forEach(k=>q.delete(k));const s=q.toString();history.replaceState(null,'',location.pathname+(s?'?'+s:'')+location.hash);
+function healthImport(h){let q=new URLSearchParams(h!=null?'':location.search),via='link';
+ const lh=h!=null?h:new URL(LAUNCH_URL).hash;if(!q.has('w')&&/^#(.*&)?w=/.test(lh)){q=new URLSearchParams(lh.slice(1));via='hash'}
+ if(!q.has('w'))return;const r=healthLog(q.get('w'),q.get('u'),q.get('d'));healthNote(r,via);
+ const s=new URLSearchParams(location.search);['w','d','u'].forEach(k=>s.delete(k));const ss=s.toString();history.replaceState(null,'',location.pathname+(ss?'?'+ss:''));
  if(r.ok)viewDate=today();show('food');setTimeout(()=>toast(r.msg,r.ok?5000:7000),50);return r}
+function healthNote(r,via){S.healthLast={t:Date.now(),via,mode:appMode(),msg:r.msg,ok:r.ok?1:0};save()}
+function healthNudge(){if(healthNudged||!isStandalone()||document.hidden||S.weights.some(x=>x.d===today()))return;healthNudged=true;
+ toast('No weigh-in yet today.',9000,'Paste from Health',healthPaste)}
+window.addEventListener('hashchange',()=>{if(/^#(.*&)?w=/.test(location.hash))healthImport(location.hash)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){healthNudged=false;setTimeout(healthNudge,400)}});
 async function healthPaste(){let t='';
  try{t=await navigator.clipboard.readText()}catch(e){toast('Could not read the clipboard. Paste the number into the weight box instead.',5000);return}
  const m=/(-?\d+(?:[.,]\d+)?)\s*([a-z]*)/i.exec(t||'');if(!m){toast("The clipboard doesn't have a weight. Run your Health shortcut first.",5000);return}
- const r=healthLog(m[1],m[2]);renderFood();toast(r.msg,r.ok?4000:6000)}
+ const r=healthLog(m[1],m[2]);healthNote(r,'paste');renderFood();toast(r.msg,r.ok?4000:6000)}
 /* ---- Settings help ---- */
 function healthHelp(){return `<div class="card" id="hhelp"><h3>Auto-log weight from your scale</h3>
  <p class="muted">If your scale syncs to Apple Health, an iPhone shortcut can send the latest weight to FitCoach.</p>
@@ -65,4 +73,5 @@ function healthHelp(){return `<div class="card" id="hhelp"><h3>Auto-log weight f
  <li>Run the shortcut, open FitCoach from your Home Screen, and tap <b>Paste from Health</b> under Body weight.</li></ol>
  <p class="muted"><b>Optional, runs every morning:</b> in Shortcuts go to <b>Automation</b>, tap <b>+</b>, pick <b>Time of Day</b>, choose a time after you usually weigh in, set it to <b>Run Immediately</b>, and pick FitCoach weight. Then just open the app and tap Paste from Health.</p>
  <p class="muted"><b>Why the paste step:</b> the FitCoach icon on your Home Screen keeps its own data, separate from Safari. A shortcut link opens Safari, so it would log the weight into Safari's copy, not your app. The clipboard works with both.</p>
- <p class="muted"><b>Safari only:</b> instead of Copy to Clipboard, add <b>URL</b> with <span class="mono">${HEALTH_URL}?w=</span> and the Value, then <b>Open URLs</b>. This logs it straight into FitCoach in Safari.</p></div>`}
+ <p class="muted"><b>Safari only:</b> instead of Copy to Clipboard, add <b>URL</b> with <span class="mono">${HEALTH_URL}?w=</span> and the Value, then <b>Open URLs</b>. This logs it straight into FitCoach in Safari.</p>
+ <div class="hdiag" id="hdiag"><b>Test info</b><small>Opened as: <span id="hmode">${appMode()}</span></small><small>Opened with: <span class="mono" id="hurl">${esc(LAUNCH_URL)}</span></small><small>Last Health import: <span id="hlast">${S.healthLast?`${esc(S.healthLast.msg)} (${S.healthLast.via==='paste'?'pasted':S.healthLast.via==='hash'?'link with #w=':'link with ?w='}, in ${S.healthLast.mode}, ${new Date(S.healthLast.t).toLocaleString()})`:'none yet'}</span></small></div></div>`}
