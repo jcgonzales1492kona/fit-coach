@@ -49,7 +49,7 @@ function backupNow(j=JSON.stringify(S)){if(!hasData(S)&&!readLS(BAK))return;cons
  try{localStorage.setItem('fit-lastbak',String(t))}catch(e){}}
 function idb(fn){try{const r=indexedDB.open('fitcoach',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>fn(r.result);r.onerror=()=>{}}catch(e){}}
 function idbGet(k){return new Promise(res=>{let done=false;setTimeout(()=>{if(!done)res(null)},3000);idb(db=>{const q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>{done=true;res(q.result||null)};q.onerror=()=>{done=true;res(null)}})})}
-function toast(m,ms=5000,label,fn){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=m;if(label){const b=document.createElement('button');b.textContent=label;b.className='tbtn';b.onclick=()=>{t.hidden=true;fn()};t.appendChild(b)}t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,ms)}
+function toast(m,ms=5000,label,fn){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=m;if(label){const b=document.createElement('button');b.textContent=label;b.className='tbtn';b.onclick=()=>{fn();t.hidden=true};t.appendChild(b)}t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,ms)}
 async function startupStorage(){
  if(NEED_RESTORE){const b=await idbGet('latest');if(b&&b.data){try{const o=JSON.parse(b.data);if(hasData(o)&&!hasData(S)){S=Object.assign(structuredClone(DEF),o);save();toast('Restored your data from the on-device backup ('+new Date(b.t).toLocaleString()+').',8000);show(location.hash.slice(1)||'food')}}catch(e){}}}
  else if(LOAD_NOTE){save();toast(LOAD_NOTE,8000)}
@@ -87,7 +87,7 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  ${mealRow()}
  <button class="link" onclick="customFoodForm()">+ Create custom food</button></div>
  ${slotLogCard(entries)}
- <div class="card"><h3>Body weight</h3><div class="inl"><input id="bw" type="number" step="0.1" inputmode="decimal" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div><button class="btn sec sm hpaste" onclick="healthPaste()">Paste from Health</button>
+ <div class="card"><h3>Body weight</h3><div class="inl"><input id="bw" type="text" inputmode="decimal" autocomplete="off" placeholder="Weight (${g.unit})" onpaste="healthOnPaste(event)"><button class="btn" onclick="addWeight()">Log</button></div><button class="btn sec sm hpaste" onclick="healthPaste()">Paste from Health</button>
  ${S.weights.length?`<p class="muted">Latest ${S.weights.at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>${weighList()}`:'<p class="muted">No entries yet.</p>'}</div>
  ${goalCard()}`;
  if(S.weights.length)drawWeight()}
@@ -112,7 +112,7 @@ function customFoodForm(n0,bc0){modal(`<h3>Custom food (per 100g)</h3>${bc0?`<p 
 function saveCustom(){const n=$('#cn').value.trim();if(!n)return;const bc=$('#cbc')?$('#cbc').value:'',old=bc&&S.custom.find(x=>x.barcode===bc);
  const f=Object.assign(old||{id:'c'+Date.now()},{name:n,kcal:+$('#ck').value||0,p:+$('#cp').value||0,c:+$('#cc').value||0,f:+$('#cf').value||0,custom:1},bc?{barcode:bc}:{});
  if(!old)S.custom.push(f);save();closeModal();pickFood(f.id)}
-function addWeight(){const w=+$('#bw').value;if(!w)return;S.weights=S.weights.filter(x=>x.d!==today());S.weights.push({d:today(),w});S.weights.sort((a,b)=>a.d<b.d?-1:1);save();renderFood()}
+function addWeight(){const v=healthParse($('#bw').value);if(!v)return;if(v.u&&v.u!==S.settings.unit){const r=healthLog(v.n,v.u);renderFood();toast(r.msg.replace(' from Health',''),4000);return}const w=r1(+v.n);if(!w)return;S.weights=S.weights.filter(x=>x.d!==today());S.weights.push({d:today(),w});S.weights.sort((a,b)=>a.d<b.d?-1:1);save();renderFood()}
 /* drawWeight() lives in goals.js */
 function mkChart(id,type,labels,datasets,opt={}){charts[id]?.destroy();const el=document.getElementById(id);if(!el||!window.Chart)return;
  charts[id]=new Chart(el,{type,data:{labels,datasets},options:Object.assign({animation:false,maintainAspectRatio:false,responsive:true,plugins:{legend:{labels:{color:'#cbd5e1',boxWidth:10}}},scales:{x:{ticks:{color:'#94a3b8',maxTicksLimit:6},grid:{color:'#1e293b'}},y:{ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}}},opt)})}
