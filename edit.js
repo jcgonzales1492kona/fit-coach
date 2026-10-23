@@ -56,21 +56,32 @@ function healthImport(h){let q=new URLSearchParams(h!=null?'':location.search),v
  if(r.ok)viewDate=today();show('food');setTimeout(()=>toast(r.msg,r.ok?5000:7000),50);return r}
 function healthNote(r,via){S.healthLast={t:Date.now(),via,mode:appMode(),msg:r.msg,ok:r.ok?1:0};save()}
 function healthNudge(){if(healthNudged||!isStandalone()||document.hidden||S.weights.some(x=>x.d===today()))return;healthNudged=true;
- toast('No weigh-in yet today.',9000,'Paste from Health',healthPaste)}
+ toast('No weigh-in yet today.',12000,'Paste from Health',healthPaste)}
 window.addEventListener('hashchange',()=>{if(/^#(.*&)?w=/.test(location.hash))healthImport(location.hash)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){healthNudged=false;setTimeout(healthNudge,400)}});
-async function healthPaste(){let t='';
- try{t=await navigator.clipboard.readText()}catch(e){toast('Could not read the clipboard. Paste the number into the weight box instead.',5000);return}
- const m=/(-?\d+(?:[.,]\d+)?)\s*([a-z]*)/i.exec(t||'');if(!m){toast("The clipboard doesn't have a weight. Run your Health shortcut first.",5000);return}
- const r=healthLog(m[1],m[2]);healthNote(r,'paste');renderFood();toast(r.msg,r.ok?4000:6000)}
+/* parse "187.5", "187.5 lb", "84,6 kg", "Weight: 187.5 lbs" -> {n,u} */
+function healthParse(t){const m=/(\d+(?:[.,]\d+)?)/.exec(String(t||''));if(!m)return null;
+ const rest=String(t).slice(m.index+m[1].length),u=/^\s*(kg|kgs|kilo)/i.test(rest)?'kg':/^\s*(lb|lbs|pound)/i.test(rest)?'lb':/\bkg\b|kilogram/i.test(t)?'kg':'';
+ return{n:m[1].replace(',','.'),u}}
+function healthApply(t,via){const v=healthParse(t);if(!v){toast("That doesn't look like a weight. Run your Health shortcut, then try again.",6000);return null}
+ const prev=S.weights.map(x=>({...x})),r=healthLog(v.n,v.u);healthNote(r,via);renderFood();
+ if(r.ok&&!r.same)toast(r.msg,6000,'Undo',()=>{S.weights=prev;save();renderFood();toast('Undone.',2000)});else toast(r.msg,r.ok?4000:6000);return r}
+function healthPasteFallback(){const el=$('#bw');if(el){el.scrollIntoView({block:'center'});el.focus()}toast('Tap the box and choose Paste.',8000)}
+/* Must stay synchronous up to readText(): iOS only allows it inside the tap itself. */
+function healthPaste(){const c=navigator.clipboard;let pr=null;
+ try{pr=c&&c.readText?c.readText():null}catch(e){pr=null}
+ if(!pr){healthPasteFallback();return}
+ pr.then(t=>{if(!healthParse(t)){healthPasteFallback();return}healthApply(t,'paste')},()=>healthPasteFallback())}
+function healthOnPaste(ev){const t=(ev.clipboardData||window.clipboardData)?.getData('text')||'';const v=healthParse(t);if(!v)return;
+ ev.preventDefault();ev.target.value=v.n;ev.target.blur();healthApply(t,'paste')}
 /* ---- Settings help ---- */
 function healthHelp(){return `<div class="card" id="hhelp"><h3>Auto-log weight from your scale</h3>
  <p class="muted">If your scale syncs to Apple Health, an iPhone shortcut can send the latest weight to FitCoach.</p>
  <ol class="steps"><li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name it <b>FitCoach weight</b>.</li>
  <li>Add <b>Find Health Samples</b>. Set Type to <b>Weight</b>, Sort by <b>Start Date</b>, Order <b>Latest First</b>, turn on <b>Limit</b>, and get <b>1</b> sample.</li>
  <li>Add <b>Get Details of Health Sample</b> and choose <b>Value</b>.</li>
- <li>Add <b>Copy to Clipboard</b>. It copies the Value.</li>
- <li>Run the shortcut, open FitCoach from your Home Screen, and tap <b>Paste from Health</b> under Body weight.</li></ol>
+ <li>Add a <b>Text</b> action and put the Value in it (this makes it plain text), then add <b>Copy to Clipboard</b>.</li>
+ <li>Run the shortcut, open FitCoach from your Home Screen, and tap <b>Paste from Health</b> under Body weight, then tap <b>Paste</b> in the bubble. If that fails, tap the weight box and choose Paste.</li></ol>
  <p class="muted"><b>Optional, runs every morning:</b> in Shortcuts go to <b>Automation</b>, tap <b>+</b>, pick <b>Time of Day</b>, choose a time after you usually weigh in, set it to <b>Run Immediately</b>, and pick FitCoach weight. Then just open the app and tap Paste from Health.</p>
  <p class="muted"><b>Why the paste step:</b> the FitCoach icon on your Home Screen keeps its own data, separate from Safari. A shortcut link opens Safari, so it would log the weight into Safari's copy, not your app. The clipboard works with both.</p>
  <p class="muted"><b>Safari only:</b> instead of Copy to Clipboard, add <b>URL</b> with <span class="mono">${HEALTH_URL}?w=</span> and the Value, then <b>Open URLs</b>. This logs it straight into FitCoach in Safari.</p>
