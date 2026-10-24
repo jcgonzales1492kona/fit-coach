@@ -2,6 +2,18 @@
 const MEAL_SEED={name:'Chili-Lime Chicken Burrito Bowls',servings:4,cook:{kcal:520,p:45},/* cookbook claim, shown for reference only */
  items:[['Chicken thigh, boneless skinless, raw',907],['White rice, dry',185],['Black beans, canned, drained',480],['Corn, canned, drained',250],['Bell pepper',120],['Onion',40],['Greek yogurt 2% plain',245],['Lime juice',45],['Olive oil',2]],
  note:'Per serving: about 420 g bowl base (160 g chicken, 135 g rice, 120 g beans), 105 g corn salsa, 65 g yogurt sour cream.'};
+/* v31: remaining 4-day cookbook meals. cook is the claim for reference; label stays null so macros come from ingredients.
+   Tortillas are 42 g each (8 per batch), an estimate. Spices, herbs, and cilantro are omitted. */
+const MEAL_SEEDS=[
+ {name:'Sheet Pan Turkey Tacos with Cottage Cheese Queso',servings:4,cook:{kcal:550,p:45},
+  items:[['Ground turkey 93/7, raw',680],['Bell pepper',240],['Onion',150],['Olive oil',2],['Cottage cheese 2%',340],['Cheddar cheese',113],['Green chiles, canned',113],['Salsa',185],['Low carb tortilla',336]],
+  note:'Per serving: about 205 g taco filling, 155 g cottage cheese queso, 2 low-carb tortillas (42 g each, an estimate; check the bag), and 30 g salsa.'},
+ {name:'Stealth-Health Chicken Pasta Salad',servings:4,cook:{kcal:500,p:42},
+  items:[['Chicken breast, raw',680],['Chickpea pasta, dry',227],['Cucumber',300],['Tomato',300],['Cottage cheese 2%',225],['Greek yogurt 2% plain',120],['Lemon juice',45],['Garlic, raw',5],['Olive oil',2]],
+  note:'Per serving: about 395 g salad (125 g chicken, 125 g chickpea pasta, 145 g cucumber and tomatoes), 100 g herb dressing.'},
+ {name:'High-Protein Baked Ziti',servings:4,cook:{kcal:580,p:48},
+  items:[['Ground beef 93/7, raw',567],['Onion',75],['Garlic, raw',15],['Marinara sauce',680],['Cottage cheese 2%',450],['Spinach',120],['Pasta, dry',227],['Mozzarella part-skim',227]],
+  note:'Per serving: about 550 g baked ziti. Weigh the whole bake, subtract the dish, and divide by 4.'}];
 let mealDraft=null;
 const mealById=id=>(S.meals||[]).find(m=>m.id===id);
 const mealR1=x=>Math.round(x*10)/10;
@@ -9,11 +21,18 @@ const mealR1=x=>Math.round(x*10)/10;
 function mealCalc(m){const t={kcal:0,p:0,c:0,f:0,miss:0};(m.items||[]).forEach(it=>{const f=foodById(it.fid),k=(+it.g||0)/100;if(!f){t.miss++;return}t.kcal+=f.kcal*k;t.p+=f.p*k;t.c+=f.c*k;t.f+=f.f*k});
  const n=+m.servings||1;return{kcal:Math.round(t.kcal/n),p:mealR1(t.p/n),c:mealR1(t.c/n),f:mealR1(t.f/n),miss:t.miss,total:t}}
 function mealPer(m){return m.label?{kcal:Math.round(+m.label.kcal||0),p:mealR1(+m.label.p||0),c:mealR1(+m.label.c||0),f:mealR1(+m.label.f||0)}:mealCalc(m)}
-function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealMigrateCompute()}
+function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealSeedCookbook4();mealMigrateCompute()}
 function mealSeed(){if(S.mig.mealSeed)return;S.mig.mealSeed=1;S.mig.mealCompute=1;
  if(S.meals.some(m=>m.name.toLowerCase()===MEAL_SEED.name.toLowerCase()))return;
  const items=MEAL_SEED.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null}).filter(Boolean);
  S.meals.push({id:'m'+Date.now(),name:MEAL_SEED.name,servings:MEAL_SEED.servings,items,note:MEAL_SEED.note,label:null,cook:{...MEAL_SEED.cook}})}
+/* phones that already ran mealSeed still get the three later cookbook meals, once, if the name is missing */
+function mealSeedCookbook4(){if(S.mig.mealSeedCookbook4)return;
+ const have=new Set(S.meals.map(m=>m.name.toLowerCase())),base=Date.now(),add=[];
+ for(let i=0;i<MEAL_SEEDS.length;i++){const seed=MEAL_SEEDS[i];if(have.has(seed.name.toLowerCase()))continue;
+  const items=seed.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null});if(items.some(x=>!x))return;
+  add.push({id:'m'+(base+i+1),name:seed.name,servings:seed.servings,items,note:seed.note,label:null,cook:{...seed.cook}})}
+ add.forEach(m=>S.meals.push(m));S.mig.mealSeedCookbook4=1;save()}
 /* v25: the seeded bowl used the cookbook override (520 kcal, P45); switch it to the ingredient numbers unless she changed it */
 function mealMigrateCompute(){if(S.mig.mealCompute)return;S.mig.mealCompute=1;
  const m=S.meals.find(x=>x.name.toLowerCase()===MEAL_SEED.name.toLowerCase());
