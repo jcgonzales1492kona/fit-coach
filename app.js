@@ -131,6 +131,24 @@ function genMeso(days,goal){const sp=SPLITS[days],used={};
    const e=pool[0];seen.add(e.name);used[e.name]=(used[e.name]||0)+1;return{...e}})}});
  S.meso={days,goal,split:sp.name,plan,week:0,day:0,start:today()};save();renderWorkout()}
 function lastSets(name){for(let i=S.sessions.length-1;i>=0;i--){const s=S.sessions[i].sets.filter(x=>x.ex===name);if(s.length)return{date:S.sessions[i].date,sets:s}}return null}
+function sameEx(set,ex){if(!set)return false;const name=ex&&ex.name!=null?ex.name:ex;if(set.ex===name)return true;return !!(ex&&ex.id&&set.id&&set.id===ex.id)}
+/* Most recent finished session of this day that actually logged this exercise. */
+function daySets(dayName,ex){let best=null,bi=-1;(S.sessions||[]).forEach((s,i)=>{if(!s||s.day!==dayName||!s.sets)return;const sets=s.sets.filter(x=>sameEx(x,ex));if(!sets.length)return;const d=s.date||'';if(!best||d>(best.date||'')||(d===(best.date||'')&&i>bi)){best={date:s.date,day:s.day,sets};bi=i}});return best}
+/* Custom programs copy last logged sets. Generated mesocycles keep their progression / deload rule. */
+function repeatSets(dayName,ex){if(!(isProg()||(ex&&ex.reps)))return null;return daySets(dayName,ex)}
+function priorSets(dayName,ex){const name=ex&&ex.name!=null?ex.name:ex;if(isProg()||(ex&&ex.reps)){const P=daySets(dayName,ex);if(P)return P}return lastSets(name)}
+const numField=v=>v===''||v==null||isNaN(+v)?'':+v;
+const setPair=s=>`${numField(s.w)===''?'–':numField(s.w)}×${numField(s.r)===''?'–':numField(s.r)}`;
+function seedSets(e,week,dayName){const P=repeatSets(dayName,e);if(P)return P.sets.map(p=>({w:numField(p.w),r:numField(p.r),rir:'',done:false,pre:true}));const sg=suggest(e);return Array.from({length:nSets(e,week)},(_,si)=>({w:sg.w,r:repT(e,si,sg),rir:'',done:false,pre:true}))}
+function plannedSets(e,week,dayName){const P=repeatSets(dayName,e);return P?P.sets.length:nSets(e,week)}
+function shortWhen(iso){if(!iso)return '';const d=new Date(iso+'T12:00');return isNaN(+d)?String(iso):d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+function sugLine(e,dayName){const P=repeatSets(dayName,e);if(P){const when=P.date?' ('+esc(shortWhen(P.date))+')':'';return `Last ${esc(dayName)}${when}: ${P.sets.map(setPair).join(', ')}. Filled in from that workout. Adjust, then check off. · RIR ${curRIR()}`}return `${suggest(e).txt} · RIR ${curRIR()}`}
+function exHint(e,dayName,n,sg){const P=repeatSets(dayName,e);if(P)return `${P.sets.length} set${P.sets.length===1?'':'s'} · last time ${P.sets.map(setPair).join(', ')}`;return `${e.reps?e.reps.join(' / ')+' reps':n+' sets × '+sg.r+' reps'}${sg.w!==''?' · '+sg.w+' '+S.settings.unit:''}`}
+function fillRepeatSets(){if(typeof KP!=='undefined'&&KP)return;const A=act();if(!A||!S.meso)return;const day=S.meso.plan[S.meso.day],week=S.meso.week;let ch=false;
+ day.ex.forEach((e,ei)=>{const rows=A.sets[ei]||[];if(rows.length!==nSets(e,week)||!rows.every(s=>s&&s.pre&&!s.done))return;const P=repeatSets(day.name,e);if(!P)return;const sg=suggest(e);
+  if(!rows.every((s,si)=>(s.w===''||s.w==null||s.w===sg.w)&&(s.r===''||s.r==null||s.r===repT(e,si,sg))))return;
+  const next=seedSets(e,week,day.name);if(rows.length===next.length&&rows.every((s,i)=>s.w===next[i].w&&s.r===next[i].r))return;A.sets[ei]=next;ch=true});
+ if(ch)save()}
 /* ---- equipment / plates ---- */
 const BARBELL=new Set(['Barbell Bench Press','Incline Barbell Press','Close-Grip Bench Press','Barbell Row','Overhead Press','Barbell Curl','Back Squat','Front Squat','Romanian Deadlift','Stiff-Leg Deadlift','Good Morning','Hip Thrust','Glute Bridge','Deadlift']);
 const UNI=new Set(['One-Arm Dumbbell Row','Bulgarian Split Squat','Walking Lunge','Step-Up','Cable Kickback','Cable Lateral Raise']);
@@ -175,14 +193,14 @@ const curRIR=()=>isProg()?2:S.meso.week>=WEEKS?DELOAD_RIR:RIR[S.meso.week];
 /* ---- active workout state (persisted) ---- */
 function act(){const M=S.meso,key=M.week+'-'+M.day;if(!S.active||S.active.key!==key)return null;return S.active}
 function startWorkout(){const M=S.meso,day=M.plan[M.day];
- S.active={key:M.week+'-'+M.day,cur:0,started:Date.now(),sets:day.ex.map(e=>{const sg=suggest(e);return Array.from({length:nSets(e,M.week)},(_,si)=>({w:sg.w,r:repT(e,si,sg),rir:'',done:false,pre:true}))})};save();renderWorkout()}
+ S.active={key:M.week+'-'+M.day,cur:0,started:Date.now(),sets:day.ex.map(e=>seedSets(e,M.week,day.name))};save();renderWorkout()}
 function renderWorkout(){const M=S.meso;
  if(!M){$('#workout').innerHTML=`${S.myPlan?`<div class="card"><h3>${esc(S.myPlan.name)}</h3><p class="muted">${S.myPlan.schedule.map(esc).join(' · ')}</p><button class="btn" onclick="loadProgram()">Use my program</button></div>`:''}<div class="card"><h3>Have a program file?</h3><button class="btn sec" onclick="importProgram()">Import program</button></div><div class="card"><h3>Or generate a mesocycle</h3><p class="muted">${WEEKS-1} accumulation weeks with sets ramping up and RIR dropping (3→0), then a deload week.</p>
   <label>Days per week<select id="md"><option>3</option><option selected>4</option><option>5</option></select></label>
   <label>Goal<select id="mg">${Object.entries(GOALS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></label>
   <button class="btn" onclick="genMeso(+$('#md').value,$('#mg').value)">Generate plan</button></div>`;return}
  act()&&!showOv?renderActive():renderOverview()}
-function renderOverview(){const M=S.meso,day=M.plan[M.day],deload=M.week>=WEEKS&&!isProg(),sets=day.ex.map(e=>nSets(e,M.week)),tot=sets.reduce((a,b)=>a+b,0);
+function renderOverview(){const M=S.meso,day=M.plan[M.day],deload=M.week>=WEEKS&&!isProg(),sets=day.ex.map(e=>plannedSets(e,M.week,day.name)),tot=sets.reduce((a,b)=>a+b,0);
  const mins=day.mins||Math.round(tot*(S.settings.rest+45)/60+5),mus={},hits={};day.ex.forEach((e,i)=>musOf(e).forEach((m,k)=>{(mus[m]||={n:0,s:0});mus[m].n++;mus[m].s+=sets[i]*(k?0.5:1);hits[m]=Math.max(hits[m]||0,k?0.5:1)}));
  $('#workout').innerHTML=`<div class="ovh"><small class="muted">${M.split} · ${isProg()?'Your plan':GOALS[M.goal].label} · Week ${M.week+1}${deload?' (Deload)':''}</small>
  <div class="ovt"><h2>${day.name}</h2><select onchange="jumpDay(this.value)">${M.plan.map((d,i)=>`<option value="${i}" ${i===M.day?'selected':''}>${d.name}</option>`).join('')}</select></div>
@@ -190,19 +208,19 @@ function renderOverview(){const M=S.meso,day=M.plan[M.day],deload=M.week>=WEEKS&
  ${isProg()?`<div class="weeks sched">${M.schedule.map((d,i)=>`<span class="${d===day.name?'cur':d==='Rest'?'':'done'}">${['M','T','W','T','F','S','S'][i]}<br>${d}</span>`).join('')}</div>`:''}<div class="weeks" ${isProg()?'hidden':''}>${Array.from({length:WEEKS+1},(_,i)=>`<span class="${i<M.week?'done':i===M.week?'cur':''}">W${i+1}${i===WEEKS?'D':''}</span>`).join('')}</div>
  <h4>Target muscles</h4><div class="mcar">${Object.entries(mus).sort((a,b)=>b[1].s-a[1].s).map(([m,v])=>`<div class="mc">${bodySVG(VIEW_OF(m),{[m]:1},CROP[m],'mcfig')}<div><b>${m}</b><small>${v.n} exercise${v.n>1?'s':''}</small><small>${v.s} sets</small></div></div>`).join('')}</div>
  <div class="card fullmap">${bodySVG('front',hits)}${bodySVG('back',hits)}<div class="legend"><span><i class="p"></i>Primary</span><span><i class="s"></i>Secondary</span></div></div>
- <h4>Exercises</h4><div class="card flat">${day.ex.map((e,i)=>{const sg=suggest(e);return `<div class="exrow">${thumbLink(e)}<div class="grow">${nameLink(e)}<small>${e.reps?e.reps.join(' / ')+' reps':sets[i]+' sets × '+sg.r+' reps'}${sg.w!==''?' · '+sg.w+' '+S.settings.unit:''}</small>${musOf(e).map((m,k)=>`<span class="mtag ${k?'':'pri'}">${m}</span>`).join(' ')} <button class="edl" onclick="editDemo(decodeURIComponent('${encN(e.name)}'))">✎ Demo link</button></div><button class="link" onclick="swapEx(${i})">⇄</button></div>`}).join('')}</div>
+ <h4>Exercises</h4><div class="card flat">${day.ex.map((e,i)=>{const sg=suggest(e);return `<div class="exrow">${thumbLink(e)}<div class="grow">${nameLink(e)}<small>${exHint(e,day.name,sets[i],sg)}</small>${musOf(e).map((m,k)=>`<span class="mtag ${k?'':'pri'}">${m}</span>`).join(' ')} <button class="edl" onclick="editDemo(decodeURIComponent('${encN(e.name)}'))">✎ Demo link</button></div><button class="link" onclick="swapEx(${i})">⇄</button></div>`}).join('')}</div>
  ${act()?`<button class="btn wide" onclick="showOv=false;renderWorkout()">Resume workout</button>`:`<button class="btn wide" onclick="showOv=false;startWorkout()">Start workout</button>`}
  <button class="link center" onclick="planModal()">Change plan</button>`}
 function planModal(){modal(`<h3>Change plan</h3><p class="muted">Logged history is kept.</p>${S.myPlan&&!isProg()?`<button class="btn wide" onclick="loadProgram()">Use ${esc(S.myPlan.name)}</button>`:''}<button class="btn sec wide" onclick="closeModal();importProgram()">Import program</button><button class="btn sec wide" onclick="if(confirm('Leave the current plan and generate a new mesocycle? Your program stays saved on this phone.')){S.meso=null;S.active=null;save();closeModal();renderWorkout()}">Generate a mesocycle instead</button>`)}
-function renderActive(){const M=S.meso,A=act(),day=M.plan[M.day],ci=A.cur,e=day.ex[ci],L=lastSets(e.name),sg=suggest(e),u=S.settings.unit,uni=isUni(e);
+function renderActive(){fillRepeatSets();const M=S.meso,A=act(),day=M.plan[M.day],ci=A.cur,e=day.ex[ci],L=priorSets(day.name,e),u=S.settings.unit,uni=isUni(e);
  const ds=A.sets[ci],uL=u[0].toUpperCase()+u.slice(1);
  $('#workout').innerHTML=`<div class="atop"><button class="link" onclick="showOv=true;closeKP(false);renderWorkout()">‹ Overview</button><b>${day.name}</b><button id="rest" class="restpill" onclick="restModal()">Rest</button><button class="more" aria-label="Workout options" onclick="workoutMenu()">⋯</button><button class="btn sm" onclick="finishWorkout()">Finish</button></div>
  <div class="car">${day.ex.map((x,i)=>{const d=A.sets[i],n=d.filter(s=>s.done).length;return `<button class="ci ${i===ci?'on':''} ${n===d.length?'fin':''}" onclick="S.active.cur=${i};save();renderWorkout()"><div class="cth">${thumb(x)}</div><small>${esc(x.name)}</small><em>${n}/${d.length}</em></button>`}).join('')}</div>
  <div class="card">
   <div class="exh">${thumbLink(e,'th big')}<div class="grow">${nameLink(e)}<div>${musOf(e).slice(0,2).map((m,k)=>`<span class="mtag ${k?'':'pri'}">${m}</span>`).join(' ')} ${demoLink(e)}</div></div><button class="link" onclick="swapEx(${ci})">⇄ Swap</button></div>
-  <div class="sug">${sg.txt} · RIR ${curRIR()}</div>
+  <div class="sug">${sugLine(e,day.name)}</div>
   <div class="stbl"><div class="sh"><span>Set</span><span>Previous</span><span>${uL}${uni?'/Side':''}</span><span>Reps${uni?'/Side':''}</span><span>RIR</span><span></span></div>
-  ${ds.map((s,si)=>{const p=L&&L.sets[si];return `<div class="sr ${s.done?'ok':''}"><span>${si+1}</span><span class="prev">${p?`${p.w}×${p.r}`:'–'}</span>
+  ${ds.map((s,si)=>{const p=L&&L.sets[si];return `<div class="sr ${s.done?'ok':''}"><span>${si+1}</span><span class="prev">${p?setPair(p):'–'}</span>
    ${['w','r','rir'].map(k=>`<button class="cell ${k==='rir'?'small':''} ${s.pre&&k!=='rir'?'pre':''} ${KP&&KP.ei===ci&&KP.si===si&&KP.k===k?'edit':''}" onclick="openKP(${ci},${si},'${k}')">${s[k]===''?(k==='rir'?curRIR():'–'):s[k]}</button>`).join('')}
    <button class="ckb" onclick="toggleSet(${ci},${si})">${s.done?'✓':''}</button></div>`}).join('')}</div>
   <div class="inl"><button class="link" onclick="S.active.sets[${ci}].push({...S.active.sets[${ci}].at(-1),done:false});save();renderWorkout()">+ Add set</button><span class="grow"></span>${ci<day.ex.length-1?`<button class="btn sec sm" onclick="S.active.cur++;save();renderWorkout()">Next exercise ›</button>`:''}</div>
@@ -243,8 +261,8 @@ function restModal(){const left=restEnd?Math.max(0,Math.round((restEnd-Date.now(
 function swapEx(ei){const e=S.meso.plan[S.meso.day].ex[ei],L=LIB();
  modal(`<h3>Swap ${esc(e.name)}</h3><p class="muted">${esc(e.name)} · ${demoLink(e)}</p>${L.map((o,i)=>o.muscle===e.muscle&&o.name!==e.name?`<div class="row tap" onclick="doSwap(${ei},${i})"><div class="inl">${thumbLink(o)}<div><b>${esc(o.name)}</b><small>${o.type==='c'?'compound':'isolation'}${o.custom?' · custom':''}</small></div></div>${demoLink(o)}</div>`:'').join('')}
  <button class="link" onclick="customExForm('${e.muscle}',${ei})">+ Add custom exercise</button>`)}
-function doSwap(ei,i){const o=LIB()[i],old=S.meso.plan[S.meso.day].ex[ei];S.meso.plan[S.meso.day].ex[ei]={...o,...(old.reps?{reps:old.reps}:{})};
- if(act()){const sg=suggest(o);S.active.sets[ei]=Array.from({length:nSets(S.meso.plan[S.meso.day].ex[ei],S.meso.week)},(_,si)=>({w:sg.w,r:repT(S.meso.plan[S.meso.day].ex[ei],si,sg),rir:'',done:false,pre:true}))}save();closeModal();renderWorkout()}
+function doSwap(ei,i){const o=LIB()[i],day=S.meso.plan[S.meso.day],old=day.ex[ei];day.ex[ei]={...o,...(old.reps?{reps:old.reps}:{})};
+ if(act())S.active.sets[ei]=seedSets(day.ex[ei],S.meso.week,day.name);save();closeModal();renderWorkout()}
 function customExForm(mu='chest',ei=-1){modal(`<h3>Custom exercise</h3><label>Name<input id="xn"></label>
  <label>Muscle group<select id="xm">${MUSCLES.map(m=>`<option ${m===mu?'selected':''}>${m}</option>`).join('')}</select></label>
  <label>Type<select id="xt"><option value="c">Compound</option><option value="i">Isolation</option></select></label>
@@ -266,7 +284,7 @@ function deleteSession(i){if(!confirm('Delete this workout from your history? Ch
  toast('Workout deleted',5000,'Undo',()=>{S.sessions.splice(i,0,rm);save();renderCur()})}
 function renderCur(){const t=location.hash.slice(1)||'food';({food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderProgress)()}
 function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
- day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
+ day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,...(e.id?{id:e.id}:{}),muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
  if(!confirm(`Finish workout with ${sets.length} sets?`))return;
  const prev=S.sessions.slice();S.sessions.push({date:today(),week:M.week,day:day.name,sets});S.active=null;restEnd=0;closeKP(false);M.day++;if(M.day>=M.plan.length){M.day=0;M.week++;if(M.week>WEEKS&&!isProg()){alert('Mesocycle complete! Generate a new one.');S.meso=null}}
