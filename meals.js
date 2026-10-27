@@ -21,7 +21,7 @@ const mealR1=x=>Math.round(x*10)/10;
 function mealCalc(m){const t={kcal:0,p:0,c:0,f:0,miss:0};(m.items||[]).forEach(it=>{const f=foodById(it.fid),k=(+it.g||0)/100;if(!f){t.miss++;return}t.kcal+=f.kcal*k;t.p+=f.p*k;t.c+=f.c*k;t.f+=f.f*k});
  const n=+m.servings||1;return{kcal:Math.round(t.kcal/n),p:mealR1(t.p/n),c:mealR1(t.c/n),f:mealR1(t.f/n),miss:t.miss,total:t}}
 function mealPer(m){return m.label?{kcal:Math.round(+m.label.kcal||0),p:mealR1(+m.label.p||0),c:mealR1(+m.label.c||0),f:mealR1(+m.label.f||0)}:mealCalc(m)}
-function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealSeedCookbook4();mealSeedBurrito();mealEnsureShipped();mealMigrateCompute()}
+function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealSeedCookbook4();mealSeedBurrito();mealDropPlainZiti();mealEnsureShipped();mealMigrateCompute()}
 function mealSeed(){if(S.mig.mealSeed)return;S.mig.mealSeed=1;S.mig.mealCompute=1;
  if(S.meals.some(m=>m.name.toLowerCase()===MEAL_SEED.name.toLowerCase()))return;
  const items=MEAL_SEED.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null}).filter(Boolean);
@@ -44,17 +44,36 @@ function mealSeedBurrito(){if(S.mig.mealSeedBurrito)return;
  const items=seed.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null});if(items.some(x=>!x))return;
  S.meals.push({id:'m'+(Date.now()+4),name:seed.name,servings:seed.servings,items,note:seed.note,label:null,cook:{...seed.cook},course:seed.course});
  S.mig.mealSeedBurrito=1;save()}
+/* v35: three more breakfast meals. cook is the card claim; label stays null so macros come from ingredients.
+   Oats omit the optional whey and maple. Egg-bake turkey is 340 g raw from the shared sausage batch.
+   Spices, vanilla, cinnamon, and oil spray are omitted. Pickled onions count only the 30 g eaten per bowl. */
+const MEAL_BREAKFAST=[
+ {name:'Stealth-Health Berry Overnight Oats',course:'breakfast',servings:2,cook:{kcal:430,p:34},
+  items:[['Greek yogurt nonfat plain',250],['Cottage cheese 1%',200],['Milk skim',165],['Rolled oats, dry',80],['Chia seeds',20],['Frozen mixed berries',200]],
+  note:'Per serving: about 255 g oat base and 100 g berries (whole jar about 455 g). Base only, no whey or maple. 160 ml fat-free milk. Prep about 10 min; no cook. Fridge at least 6 hours.'},
+ {name:'Spinach, Turkey + Tomato Egg Bake',course:'breakfast',servings:4,cook:{kcal:430,p:50},
+  items:[['Ground turkey 93/7, raw',340],['Bell pepper',120],['Onion',75],['Egg, whole',300],['Liquid egg whites',454],['Cottage cheese 1%',225],['Spinach',120],['Tomato',150],['Shredded Mexican blend',80]],
+  note:'Per serving: about 360 g, one quarter of the bake. Turkey is 340 g raw (about 255 g cooked) from the shared sausage batch, plus about 120 g pepper and 75 g onion. Prep about 10 min, bake about 40 min.'},
+ {name:'Smoky Chicken Breakfast Bowls',course:'breakfast',servings:2,cook:{kcal:480,p:50},
+  items:[['Chicken breast, raw',340],['Bell pepper',120],['Onion',75],['Potato, baked',240],['Olive oil',5],['Black beans, canned, drained',80],['Onion',60],['Salsa',120],['Greek yogurt nonfat plain',100],['Tomato',150]],
+  note:'Per serving: about 350 g bowl base (190 g chicken and veg, 120 g roasted potatoes, 40 g beans) and 215 g cold toppings (salsa, yogurt, tomatoes, 30 g pickled onion). Potatoes are the cooked weight. Prep about 15 min, cook about 30 min.'}];
 /* v34: one-shot flags never add a meal that was not in the script the phone loaded.
    Every launch adds any shipped name that is missing, unless that name was deleted. The food log is left as-is. */
 const MEAL_COURSE_NAME={
  'high-protein breakfast burritos':'breakfast',
+ 'stealth-health berry overnight oats':'breakfast',
+ 'spinach, turkey + tomato egg bake':'breakfast',
+ 'smoky chicken breakfast bowls':'breakfast',
  'chili-lime chicken burrito bowls':'lunch',
  'chicken pasta salad':'lunch',
  'stealth-health chicken pasta salad':'lunch',
  'sheet pan turkey tacos with cottage cheese queso':'dinner',
  'baked ziti':'dinner',
  'high-protein baked ziti':'dinner'};
-function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO]}
+function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST]}
+/* Exact name only. High-Protein Baked Ziti stays. Logged entries keep their saved numbers. */
+function mealDropPlainZiti(){if(S.mig.mealDropPlainZiti)return;const next=S.meals.filter(m=>(m.name||'').trim().toLowerCase()!=='baked ziti');
+ if(next.length!==S.meals.length)S.meals=next;S.mig.mealDropPlainZiti=1;save()}
 function mealGuessCourse(name){const n=(name||'').toLowerCase().trim();
  if(MEAL_COURSE_NAME[n])return MEAL_COURSE_NAME[n];
  if(/breakfast|oat|omelet|omelette|pancake|waffle/.test(n))return 'breakfast';
