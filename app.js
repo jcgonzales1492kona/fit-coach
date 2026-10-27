@@ -339,7 +339,7 @@ $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 mealMigrate();slotMigrate();
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 healthImport();setTimeout(healthNudge,800);
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 function doneSummary(name,sets,prev){const u=S.settings.unit||'lb',by={};sets.forEach(x=>(by[x.ex]||=[]).push(x));
  const best={};prev.forEach(ss=>ss.sets.forEach(x=>{const v=x.w*(1+x.r/30);if(v>(best[x.ex]||0))best[x.ex]=v}));
