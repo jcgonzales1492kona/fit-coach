@@ -21,7 +21,7 @@ const mealR1=x=>Math.round(x*10)/10;
 function mealCalc(m){const t={kcal:0,p:0,c:0,f:0,miss:0};(m.items||[]).forEach(it=>{const f=foodById(it.fid),k=(+it.g||0)/100;if(!f){t.miss++;return}t.kcal+=f.kcal*k;t.p+=f.p*k;t.c+=f.c*k;t.f+=f.f*k});
  const n=+m.servings||1;return{kcal:Math.round(t.kcal/n),p:mealR1(t.p/n),c:mealR1(t.c/n),f:mealR1(t.f/n),miss:t.miss,total:t}}
 function mealPer(m){return m.label?{kcal:Math.round(+m.label.kcal||0),p:mealR1(+m.label.p||0),c:mealR1(+m.label.c||0),f:mealR1(+m.label.f||0)}:mealCalc(m)}
-function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealSeedCookbook4();mealMigrateCompute()}
+function mealMigrate(){S.meals||=[];S.mig||={};mealSeed();mealSeedCookbook4();mealSeedBurrito();mealMigrateCompute()}
 function mealSeed(){if(S.mig.mealSeed)return;S.mig.mealSeed=1;S.mig.mealCompute=1;
  if(S.meals.some(m=>m.name.toLowerCase()===MEAL_SEED.name.toLowerCase()))return;
  const items=MEAL_SEED.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null}).filter(Boolean);
@@ -33,6 +33,17 @@ function mealSeedCookbook4(){if(S.mig.mealSeedCookbook4)return;
   const items=seed.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null});if(items.some(x=>!x))return;
   add.push({id:'m'+(base+i+1),name:seed.name,servings:seed.servings,items,note:seed.note,label:null,cook:{...seed.cook}})}
  add.forEach(m=>S.meals.push(m));S.mig.mealSeedCookbook4=1;save()}
+/* v33: breakfast burritos. cook is the card claim (~430 kcal, 40 g protein); label stays null so macros come from ingredients.
+   Turkey is 567 g of the shared 907 g raw batch. Spices are omitted. Tortillas are 70 g high-fiber whole wheat each. */
+const MEAL_BURRITO={name:'High-Protein Breakfast Burritos',servings:8,cook:{kcal:430,p:40},
+ items:[['Ground turkey 93/7, raw',567],['Egg, whole',400],['Liquid egg whites',454],['Cottage cheese 1%',150],['Bell pepper',240],['Onion',150],['Spinach',60],['Black beans, canned, drained',170],['High-fiber whole wheat tortilla',560],['Shredded Mexican blend',80],['Greek yogurt nonfat plain',200],['Salsa',200]],
+ note:'Per serving: about 235 g cooked filling (110 g egg scramble, 53 g turkey sausage, 72 g veg, beans, and cheese) and 50 g yogurt-salsa swirl. Turkey is 567 g of the shared raw batch. Tortillas are 70 g each. Freezer-friendly; prep about 20 min, cook about 25 min.'};
+function mealSeedBurrito(){if(S.mig.mealSeedBurrito)return;
+ const seed=MEAL_BURRITO,have=(S.meals||[]).some(m=>m.name.toLowerCase()===seed.name.toLowerCase());
+ if(have){S.mig.mealSeedBurrito=1;save();return}
+ const items=seed.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null});if(items.some(x=>!x))return;
+ S.meals.push({id:'m'+(Date.now()+4),name:seed.name,servings:seed.servings,items,note:seed.note,label:null,cook:{...seed.cook}});
+ S.mig.mealSeedBurrito=1;save()}
 /* v25: the seeded bowl used the cookbook override (520 kcal, P45); switch it to the ingredient numbers unless she changed it */
 function mealMigrateCompute(){if(S.mig.mealCompute)return;S.mig.mealCompute=1;
  const m=S.meals.find(x=>x.name.toLowerCase()===MEAL_SEED.name.toLowerCase());
