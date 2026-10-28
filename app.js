@@ -18,7 +18,10 @@ const repRange=e=>{const v=e.reps.flatMap(r=>r.split('-').map(Number));return[Ma
 const repT=(e,si,sg)=>e.reps?(+String(e.reps[Math.min(si,e.reps.length-1)]).split('-')[0]):sg.r;
 const isProg=()=>S.meso&&S.meso.program;
 const planEx=()=>S.myPlan?S.myPlan.days.flatMap(d=>d.ex.map(({reps,...e})=>e)):[];
-function loadProgram(){const P=S.myPlan;if(!P)return;S.meso={program:1,split:P.name,goal:'hypertrophy',schedule:P.schedule,plan:structuredClone(P.days),week:0,day:0,start:today()};S.active=null;save();closeModal();renderWorkout()}
+function schedFix(P){if(!P||!Array.isArray(P.days))return false;const key=n=>{const s=String(n||'').toLowerCase();if(/booty/.test(s))return 'booty';if(/\bpush\b/.test(s))return 'push';if(/\bpull\b/.test(s))return 'pull';if(/\blegs\b/.test(s))return 'legs';return ''};
+ const days=P.days.filter(d=>d&&key(d.name)!=='booty'),by=k=>days.find(d=>key(d.name)===k),push=by('push'),pull=by('pull'),legs=by('legs');if(!push||!pull||!legs)return false;
+ P.days=days;P.schedule=['Rest','Rest','Rest',push.name,pull.name,legs.name,'Cond'];return true}
+function loadProgram(){const P=S.myPlan;if(!P)return;schedFix(P);S.meso={program:1,split:P.name,goal:'hypertrophy',schedule:P.schedule,plan:structuredClone(P.days),week:0,day:0,start:today()};S.active=null;save();closeModal();renderWorkout()}
 function exportProgram(){const P=S.meso&&S.meso.program?{name:S.meso.split,schedule:S.meso.schedule,days:S.meso.plan}:S.myPlan;if(!P){alert('No saved program to export.');return}
  const out={type:'fitcoach-program',version:1,name:P.name,schedule:P.schedule,days:P.days.map(d=>({name:d.name,mins:d.mins,ex:d.ex.map(e=>({...e,video:(S.demoOv||{})[e.name]||e.video||(VIDEOS[e.name]?'https://www.youtube.com/watch?v='+VIDEOS[e.name]:'')}))}))};
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'}));a.download=(P.name||'program').replace(/[^\w-]+/g,'-')+'.json';a.click()}
@@ -205,7 +208,7 @@ function renderOverview(){const M=S.meso,day=M.plan[M.day],deload=M.week>=WEEKS&
  $('#workout').innerHTML=`<div class="ovh"><small class="muted">${M.split} · ${isProg()?'Your plan':GOALS[M.goal].label} · Week ${M.week+1}${deload?' (Deload)':''}</small>
  <div class="ovt"><h2>${day.name}</h2><select onchange="jumpDay(this.value)">${M.plan.map((d,i)=>`<option value="${i}" ${i===M.day?'selected':''}>${d.name}</option>`).join('')}</select></div>
  <div class="meta"><span>⏱ ~${mins} min</span><span>${day.ex.length} exercises</span><span>${tot} sets</span><span>RIR ${curRIR()}</span></div></div>
- ${isProg()?`<div class="weeks sched">${M.schedule.map((d,i)=>`<span class="${d===day.name?'cur':d==='Rest'?'':'done'}">${['M','T','W','T','F','S','S'][i]}<br>${d}</span>`).join('')}</div>`:''}<div class="weeks" ${isProg()?'hidden':''}>${Array.from({length:WEEKS+1},(_,i)=>`<span class="${i<M.week?'done':i===M.week?'cur':''}">W${i+1}${i===WEEKS?'D':''}</span>`).join('')}</div>
+ ${isProg()?`<div class="weeks sched">${M.schedule.map((d,i)=>`<span class="${d===day.name?'cur':d==='Rest'?'':'done'}">${['M','T','W','T','F','S','S'][i]}<br>${esc(d)}</span>`).join('')}</div><p class="muted">Thu Push, Fri Pull, Sat Legs. Sunday is conditioning. Mon to Wed are rest and walks.</p>`:''}<div class="weeks" ${isProg()?'hidden':''}>${Array.from({length:WEEKS+1},(_,i)=>`<span class="${i<M.week?'done':i===M.week?'cur':''}">W${i+1}${i===WEEKS?'D':''}</span>`).join('')}</div>
  <h4>Target muscles</h4><div class="mcar">${Object.entries(mus).sort((a,b)=>b[1].s-a[1].s).map(([m,v])=>`<div class="mc">${bodySVG(VIEW_OF(m),{[m]:1},CROP[m],'mcfig')}<div><b>${m}</b><small>${v.n} exercise${v.n>1?'s':''}</small><small>${v.s} sets</small></div></div>`).join('')}</div>
  <div class="card fullmap">${bodySVG('front',hits)}${bodySVG('back',hits)}<div class="legend"><span><i class="p"></i>Primary</span><span><i class="s"></i>Secondary</span></div></div>
  <h4>Exercises</h4><div class="card flat">${day.ex.map((e,i)=>{const sg=suggest(e);return `<div class="exrow">${thumbLink(e)}<div class="grow">${nameLink(e)}<small>${exHint(e,day.name,sets[i],sg)}</small>${musOf(e).map((m,k)=>`<span class="mtag ${k?'':'pri'}">${m}</span>`).join(' ')} <button class="edl" onclick="editDemo(decodeURIComponent('${encN(e.name)}'))">✎ Demo link</button></div><button class="link" onclick="swapEx(${i})">⇄</button></div>`}).join('')}</div>
@@ -336,7 +339,15 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
 function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hidden=true;if(location.hash==='#settings')renderSettings()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
-mealMigrate();slotMigrate();
+function schedMigrate(){S.mig||={};if(S.mig.schedThu)return;
+ const key=n=>/booty/i.test(String(n||''))?'booty':'';
+ schedFix(S.myPlan);
+ if(S.meso&&S.meso.program&&Array.isArray(S.meso.plan)){const prev=S.meso.plan[S.meso.day]&&S.meso.plan[S.meso.day].name,activeName=S.active&&S.meso.plan[+String(S.active.key||'').split('-')[1]]&&S.meso.plan[+String(S.active.key||'').split('-')[1]].name;
+  const holder={days:S.meso.plan,schedule:S.meso.schedule};if(schedFix(holder)){S.meso.plan=holder.days;S.meso.schedule=holder.schedule;
+   const ni=holder.days.findIndex(d=>d.name===(activeName||prev));S.meso.day=ni>=0?ni:0;
+   if(S.active){if(ni<0||key(activeName)==='booty')S.active=null;else S.active.key=S.meso.week+'-'+ni}}}
+ S.mig.schedThu=1;save()}
+mealMigrate();slotMigrate();schedMigrate();
 startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 healthImport();setTimeout(healthNudge,800);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});

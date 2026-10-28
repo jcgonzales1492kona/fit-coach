@@ -10,7 +10,7 @@ const RM='Rowing Machine',CMOVES=[{A:[[RM,'20 min easy pace']],B:[[RM,'6 rounds 
  {A:[[RM,'25 min easy pace']],B:[[RM,'8 rounds · 1 min hard / 1.5 min easy']],C:[['Kettlebell Swing','10 reps'],['Goblet Squat','10 reps'],["Farmer's Carry",'40 m'],[RM,'250 m']]},
  {A:[[RM,'30 min easy pace']],B:[[RM,'5 rounds · 500 m hard, 2 min rest']],C:[[RM,'12 cal'],['Kettlebell Swing','10 reps'],['Dumbbell Thruster','8 reps'],["Farmer's Carry",'40 m']]},
  {A:[[RM,'30-35 min easy pace']],B:[[RM,'10 rounds · 30 s all-out / 90 s easy']],C:[[RM,'300 m'],['Kettlebell Swing','12 reps'],['Dumbbell Push Press','10 reps'],["Farmer's Carry",'40 m'],['Burpee','10 reps']]}];
-const CDAY={A:'Saturday',B:'Wednesday',C:'Monday'},CWHY={A:'Easy recovery on your rest day',B:'Hard effort, away from leg days',C:'Rest day after Booty, before Push'};
+const CDAY={A:'Sunday',B:'Sunday',C:'Sunday'},CWHY={A:'Easy row. A gentle default for Sunday.',B:'Intervals. Same Sunday. Keep the effort easy near procedure areas.',C:'Same Sunday. A walk in early weeks, a circuit later.'};
 const movesOf=w=>CMOVES[Math.min(3,Math.max(0,Math.ceil(w/2)-1))];
 const mvChips=ms=>`<div class="cmoves">${ms.map(([m,det])=>{const e={name:m};return `<div class="exrow">${thumbLink(e)}<div class="grow">${nameLink(e)}<small>${esc(det)}</small></div><button class="edl" onclick="editDemo(decodeURIComponent('${encodeURIComponent(m)}'))">✎ Edit</button></div>`}).join('')}</div>`;
 let condWeek=null;
@@ -20,12 +20,12 @@ const blockOf=w=>COND[Math.min(3,Math.max(0,Math.ceil(w/2)-1))];
 const fmtT=s=>{if(s==null||isNaN(s))return '–';const m=Math.floor(s/60),r=s-m*60;return m+':'+(r<10?'0':'')+r.toFixed(1)};
 function parseT(v){const m=String(v).trim().match(/^(\d{1,2}):(\d{1,2}(?:\.\d)?)$/);return m?+m[1]*60+ +m[2]:null}
 function renderCond(){const todayName=new Date().toLocaleDateString('en-US',{weekday:'long'}),c=cst(),cw=curCondWeek(),w=condWeek??Math.min(8,Math.max(1,cw)),B=blockOf(w);
- const isDone=k=>!!c.done['w'+w+k],req=w<=2?['A','B']:['A','B','C'],n=req.filter(isDone).length;
+ const isDone=k=>!!c.done['w'+w+k],logged=['A','B','C'].filter(isDone).length;
  const tests=[...c.tests].sort((a,b)=>a.date<b.date?-1:1),best=tests.length?Math.min(...tests.map(t=>t.t)):null;
  $('#cond').innerHTML=`
- <div class="ovh"><small class="muted">8-week conditioning · 2–3 sessions/week · fits your rest days (Mon, Wed, Sat)</small><div class="ovt"><h2>Week ${w}</h2><span class="pill">${cw<1?'Starts '+c.start:cw>8?'Program complete':'Current: week '+cw}</span></div></div>
- <div class="weeks wk8">${Array.from({length:8},(_,i)=>{const k=i+1,r=k<=2?['A','B']:['A','B','C'],d=r.filter(x=>c.done['w'+k+x]).length;return `<span class="${k===w?'cur':d>=r.length?'done':''} ${k===cw?'now':''}" onclick="condWeek=${k};renderCond()">W${k}${d?`<br><small>${d}/${r.length}</small>`:''}</span>`}).join('')}</div>
- <div class="card"><div class="exh"><div class="grow"><b>Week ${w} progress</b><small class="muted" style="display:block">${n}/${req.length} done${w<=2?' · C optional':''}</small></div><div class="wbar"><i style="width:${n/req.length*100}%"></i></div></div></div>
+ <div class="ovh"><small class="muted">8-week plan. Sunday is conditioning (easy row, intervals, or circuit). Keep it gentle near procedure areas. Mon to Wed are walks and light movement.</small><div class="ovt"><h2>Week ${w}</h2><span class="pill">${cw<1?'Starts '+c.start:cw>8?'Program complete':'Current: week '+cw}</span></div></div>
+ <div class="weeks wk8">${Array.from({length:8},(_,i)=>{const k=i+1,d=['A','B','C'].filter(x=>c.done['w'+k+x]).length;return `<span class="${k===w?'cur':d?'done':''} ${k===cw?'now':''}" onclick="condWeek=${k};renderCond()">W${k}${d?`<br><small>${d}</small>`:''}</span>`}).join('')}</div>
+ <div class="card"><div class="exh"><div class="grow"><b>Week ${w}</b><small class="muted" style="display:block">${logged?logged+' logged for Sunday':'Pick one session for Sunday'}</small></div><div class="wbar"><i style="width:${logged?100:0}%"></i></div></div></div>
  ${['A','B','C'].map(k=>{const s=B[k],d=c.done['w'+w+k];return `<div class="card csess ${d?'ok':''}"><div class="exh"><span class="clet">${k}</span><div class="grow"><b>${s.t}${s.opt?' <small class="muted">(optional)</small>':''}</b><span class="cday ${CDAY[k]===todayName?'tod':''}">${CDAY[k]===todayName?'Today':CDAY[k]}</span><small class="muted" style="display:block">${s.d}</small><small class="muted cwhy">${CWHY[k]}</small></div><button class="ckb" onclick="condLog('${k}')">${d?'✓':''}</button></div>${mvChips(movesOf(w)[k])}
   ${d?`<small class="muted">Done ${d.date}${d.dur?' · '+d.dur+' min':''}${d.dist?' · '+d.dist+' m':''}${d.split?' · '+esc(d.split)+'/500m':''}${d.rpe?' · RPE '+d.rpe:''}${d.notes?' · '+esc(d.notes):''}</small>`:''}
   ${s.timer?`<button class="btn sec sm" style="margin-top:8px" onclick="condTimer(${w},'${k}')">⏱ ${s.timer.type==='emom'?'EMOM timer':s.timer.type==='rest'?'Rest timer':'Interval timer'}</button>`:''}</div>`}).join('')}
