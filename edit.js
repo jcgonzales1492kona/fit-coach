@@ -55,23 +55,36 @@ function healthImport(h){let q=new URLSearchParams(h!=null?'':location.search),v
  const s=new URLSearchParams(location.search);['w','d','u'].forEach(k=>s.delete(k));const ss=s.toString();history.replaceState(null,'',location.pathname+(ss?'?'+ss:''));
  if(r.ok)viewDate=today();show('food');setTimeout(()=>toast(r.msg,r.ok?5000:7000),50);return r}
 function healthNote(r,via){S.healthLast={t:Date.now(),via,mode:appMode(),msg:r.msg,ok:r.ok?1:0};save()}
-function healthNudge(){if(healthNudged||!isStandalone()||document.hidden||S.weights.some(x=>x.d===today()))return;healthNudged=true;
- toast('No weigh-in yet today.',12000,'Paste from Health',healthPaste)}
+function healthNudge(){if(healthNudged||!isStandalone()||document.hidden||S.weights.some(x=>x.d===today())||$('#hpw'))return;healthNudged=true;healthSheet()}
 window.addEventListener('hashchange',()=>{if(/^#(.*&)?w=/.test(location.hash))healthImport(location.hash)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){healthNudged=false;setTimeout(healthNudge,400)}});
-/* parse "187.5", "187.5 lb", "84,6 kg", "Weight: 187.5 lbs" -> {n,u} */
-function healthParse(t){const m=/(\d+(?:[.,]\d+)?)/.exec(String(t||''));if(!m)return null;
- const rest=String(t).slice(m.index+m[1].length),u=/^\s*(kg|kgs|kilo)/i.test(rest)?'kg':/^\s*(lb|lbs|pound)/i.test(rest)?'lb':/\bkg\b|kilogram/i.test(t)?'kg':'';
- return{n:m[1].replace(',','.'),u}}
-function healthApply(t,via){const v=healthParse(t);if(!v){toast("That doesn't look like a weight. Run your Health shortcut, then try again.",6000);return null}
- const prev=S.weights.map(x=>({...x})),r=healthLog(v.n,v.u);healthNote(r,via);renderFood();
- if(r.ok&&!r.same)toast(r.msg,6000,'Undo',()=>{S.weights=prev;save();renderFood();toast('Undone.',2000)});else toast(r.msg,r.ok?4000:6000);return r}
-function healthPasteFallback(){const el=$('#bw');if(el){el.scrollIntoView({block:'center'});el.focus()}toast('Tap the box and choose Paste.',8000)}
-/* Must stay synchronous up to readText(): iOS only allows it inside the tap itself. */
+/* "187.4", "187.39999999", "187.4 lb", "187,4", "84,6 kg", several lines. Empty text is not a number. */
+function healthParse(t){const s=String(t??'');if(!s.trim())return null;
+ const re=/(\d+(?:[.,]\d+)?)(?:\s*(kg|kgs|kilos?|kilograms?|lb|lbs|pounds?))?/gi;let m,best=null;
+ while((m=re.exec(s))){const u=/^k/i.test(m[2]||'')?'kg':/^[lp]/i.test(m[2]||'')?'lb':'';best={n:m[1].replace(',','.'),u};if(u)break}
+ return best}
+function healthApply(t,via){const v=healthParse(t);if(!v){healthFailMsg("That doesn't look like a weight.");return null}
+ const prev=S.weights.map(x=>({...x})),r=healthLog(v.n,v.u);healthNote(r,via);
+ if(!r.ok){healthFailMsg(r.msg);return r}
+ if($('#hpw'))closeModal();renderFood();
+ const msg=via==='typed'?r.msg.replace(' from Health',''):r.msg;
+ if(r.ok&&!r.same)toast(msg,6000,'Undo',()=>{S.weights=prev;save();renderFood();toast('Undone.',2000)});else toast(msg,r.ok?4000:6000);return r}
+function healthSheet(msg){const u=S.settings.unit==='kg'?'kg':'lb';
+ modal(`<h3>No weigh-in yet today</h3><p id="hpmsg" class="muted${msg?' warn':''}">${esc(msg||'Paste the number from your FitCoach weight shortcut, or type it below.')}</p>
+ <button class="btn wide" type="button" onclick="healthPaste()">Paste from Health</button>
+ <label>Or type today's weight (${u})<input id="hpw" type="text" inputmode="decimal" autocomplete="off" placeholder="187.4"></label>
+ <button class="btn sec wide" type="button" onclick="healthManual()">Log this weight</button>`)}
+function healthFailMsg(text){if(!$('#hpw'))healthSheet(text);const p=$('#hpmsg');if(p){p.textContent=text;p.classList.add('warn')}const el=$('#hpw');if(el)el.focus()}
+function healthFail(kind){healthFailMsg(kind==='empty'?'No weight from Health today yet. Type it below if you have it.':kind==='bad'?"That doesn't look like a weight. Type today's number below.":kind==='timeout'?"The clipboard didn't answer. Type today's weight below.":"Couldn't read the clipboard. Type today's weight below.")}
+function healthManual(){const t=$('#hpw')?$('#hpw').value:'';if(!String(t).trim()){healthFailMsg('Type a weight, or paste from Health.');return}healthApply(t,'typed')}
+/* readText() has to start inside the tap. On the Home Screen app it can hang or come back empty, so never wait in silence. */
 function healthPaste(){const c=navigator.clipboard;let pr=null;
  try{pr=c&&c.readText?c.readText():null}catch(e){pr=null}
- if(!pr){healthPasteFallback();return}
- pr.then(t=>{if(!healthParse(t)){healthPasteFallback();return}healthApply(t,'paste')},()=>healthPasteFallback())}
+ if(!pr||typeof pr.then!=='function'){healthFail('unavailable');return}
+ let settled=false;const timer=setTimeout(()=>{if(settled)return;settled=true;healthFail('timeout')},2000);
+ pr.then(t=>{clearTimeout(timer);const raw=String(t??'');if(!raw.trim()){if(!settled){settled=true;healthFail('empty')}return}
+  if(!healthParse(raw)){if(!settled){settled=true;healthFail('bad')}return}settled=true;healthApply(raw,'paste')},
+  ()=>{clearTimeout(timer);if(settled)return;settled=true;healthFail('denied')})}
 function healthOnPaste(ev){const t=(ev.clipboardData||window.clipboardData)?.getData('text')||'';const v=healthParse(t);if(!v)return;
  ev.preventDefault();ev.target.value=v.n;ev.target.blur();healthApply(t,'paste')}
 /* ---- Settings help ---- */
@@ -81,7 +94,7 @@ function healthHelp(){return `<div class="card" id="hhelp"><h3>Auto-log weight f
  <li>Add <b>Find Health Samples</b>. Set Type to <b>Weight</b>, Sort by <b>Start Date</b>, Order <b>Latest First</b>, turn on <b>Limit</b>, and get <b>1</b> sample.</li>
  <li>Add <b>Get Details of Health Sample</b> and choose <b>Value</b>.</li>
  <li>Add a <b>Text</b> action and put the Value in it (this makes it plain text), then add <b>Copy to Clipboard</b>.</li>
- <li>Run the shortcut, open FitCoach from your Home Screen, and tap <b>Paste from Health</b> under Body weight, then tap <b>Paste</b> in the bubble. If that fails, tap the weight box and choose Paste.</li></ol>
+ <li>Run the shortcut, open FitCoach from your Home Screen, and tap <b>Paste from Health</b>. If the clipboard is empty or the phone won't share it, type the number in that same pop-up.</li></ol>
  <p class="muted"><b>Optional, runs every morning:</b> in Shortcuts go to <b>Automation</b>, tap <b>+</b>, pick <b>Time of Day</b>, choose a time after you usually weigh in, set it to <b>Run Immediately</b>, and pick FitCoach weight. Then just open the app and tap Paste from Health.</p>
  <p class="muted"><b>Why the paste step:</b> the FitCoach icon on your Home Screen keeps its own data, separate from Safari. A shortcut link opens Safari, so it would log the weight into Safari's copy, not your app. The clipboard works with both.</p>
  <p class="muted"><b>Safari only:</b> instead of Copy to Clipboard, add <b>URL</b> with <span class="mono">${HEALTH_URL}?w=</span> and the Value, then <b>Open URLs</b>. This logs it straight into FitCoach in Safari.</p>
