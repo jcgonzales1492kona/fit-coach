@@ -105,6 +105,7 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  ${mealRow()}
  <button class="link" onclick="customFoodForm()">+ Create custom food</button></div>
  ${slotLogCard(entries)}
+ ${trendCard()}
  <div class="card"><h3>Body weight</h3><div class="inl"><input id="bw" type="text" inputmode="decimal" autocomplete="off" placeholder="Weight (${g.unit})" onpaste="healthOnPaste(event)"><button class="btn" onclick="addWeight()">Log</button></div><button class="btn sec sm hpaste" onclick="healthPaste()">Paste from Health</button>
  ${S.weights.length?`<p class="muted">Latest ${S.weights.at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>${weighList()}`:'<p class="muted">No entries yet.</p>'}</div>
  ${goalCard()}`;
