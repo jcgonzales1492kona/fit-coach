@@ -40,7 +40,7 @@ function h50Bag(state,make){const cur=state&&state.holiday50;
  if(!cur||typeof cur!=='object'){const blank={v:1,days:{},weeks:{},flex:[],steps:{}};if(make&&state)state.holiday50=blank;return blank}
  if(make){cur.days||={};cur.weeks||={};cur.flex||=[];cur.steps||={}}
  return cur}
-function h50Read(state){const h=h50Bag(state,false);return {v:h.v||1,days:h.days||{},weeks:h.weeks||{},flex:h.flex||[],steps:h.steps||{},enrolled:h.enrolled,cal:h.cal}}
+function h50Read(state){const h=h50Bag(state,false);return {v:h.v||1,days:h.days||{},weeks:h.weeks||{},flex:h.flex||[],steps:h.steps||{},enrolled:h.enrolled,moveLabel:h.moveLabel||''}}
 function h50Write(){return h50Bag(S,true)}
 function h50DayBag(state,iso,make){const h=h50Bag(state,!!make);const days=h.days||(make?h.days={}: {});if(!make)return days[iso]||{};days[iso]||={};return days[iso]}
 function h50Before(h,iso){return !!(h&&h50Iso(h.enrolled)&&iso<h.enrolled)}
@@ -71,7 +71,19 @@ function h50Weight(weights,start,end){
  if(!got.length)return {avg:null,n:0,days:dates.length,missing:dates.length,enough:false};
  return {avg:got.reduce((a,d)=>a+map[d],0)/got.length,n:got.length,days:dates.length,missing:dates.length-got.length,enough:got.length>=H50_W_MIN}}
 function h50StepGoal(h){const s=h&&h.steps||{},base=isFinite(+s.baseline)?+s.baseline:null,goal=base!=null&&isFinite(+s.goal)?+s.goal:null;return {baseline:base,goal}}
-function h50EventsOn(h,iso){const ev=h&&h.cal&&h.cal.events;return Array.isArray(ev)?ev.filter(e=>e&&e.date===iso):[]}
+function h50Marks(state,iso){
+ const h=h50Read(state),day=h.days[iso]||{},c=day.checks||{},food=h50Food(state,iso);
+ return {move:!!c.move,workout:!!c.workout,reflect:!!c.reflect,food:food.status||'unknown',train:h50Train(day.train),before:h50Before(h,iso),onFile:h50OnFile(state,iso).any}}
+function h50WeekChecked(state,week){let n=0;h50Range(week.start,week.end).forEach(d=>{if(h50Marks(state,d).workout)n++});return n}
+function h50CheckPut(state,iso,key,on){
+ if(!h50Index(iso)||(key!=='move'&&key!=='workout'&&key!=='reflect'))return {ok:false,error:'That check is not on the tracker.'};
+ const snap=JSON.stringify({log:state.log||null,sessions:state.sessions||null,weights:state.weights||null,settings:state.settings||null,logStatus:state.logStatus||null});
+ const d=h50DayBag(state,iso,true);d.checks||={};
+ if(on){d.checks[key]=1;d.confirmed='self'}else delete d.checks[key];
+ if(!d.checks.move&&!d.checks.workout&&!d.checks.reflect)delete d.checks;
+ if(!d.checks&&d.confirmed==='self')delete d.confirmed;
+ const same=JSON.stringify({log:state.log||null,sessions:state.sessions||null,weights:state.weights||null,settings:state.settings||null,logStatus:state.logStatus||null})===snap;
+ return same?{ok:true,self:true}:{ok:false,error:'Shared logs changed.'}}
 
 function h50NotePut(state,iso,text){if(!h50Index(iso))return false;const d=h50DayBag(state,iso,true);
  const v=String(text||'').replace(/[\r\n]+/g,' ').trim().slice(0,280);if(v)d.note=v;else delete d.note;return true}
@@ -104,45 +116,7 @@ function h50WeekPut(state,id,key,value){if(!H50_WEEKS.some(w=>w.id===+id))return
  const h=h50Bag(state,true);h.weeks[id]||={};
  const v=String(value||'').replace(/\s+/g,' ').trim().slice(0,500);if(v)h.weeks[id][key]=v;else delete h.weeks[id][key];return true}
 function h50EnrollPut(state,iso){if(!h50Index(iso))return false;h50Bag(state,true).enrolled=iso;return true}
-
-function h50IcsUnfold(text){return String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\n[ \t]/g,'')}
-function h50IcsText(s){return String(s||'').replace(/\\n/gi,' ').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\').replace(/\s+/g,' ').trim().slice(0,140)}
-function h50IcsWhen(raw){const s=String(raw||'').trim(),m=s.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(?:\d{2})?(Z)?)?/);
- if(!m)return null;const date=m[1]+'-'+m[2]+'-'+m[3];if(!m[4])return {date,time:''};
- if(m[6]==='Z'){const dt=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5]||0));if(isNaN(+dt))return {date,time:m[4]+':'+m[5]};
-  return {date:h50ISO(dt),time:String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')}}
- return {date,time:m[4]+':'+m[5]}}
-function h50Clock(v){return /^\d{2}:\d{2}$/.test(v||'')?v:''}
-function h50KeepEvent(e){if(!e||!h50Iso(e.date))return null;const title=h50IcsText(e.title);if(!title)return null;
- if(e.date<'2026-11-01'||e.date>'2026-12-31')return null;
- return {date:e.date,title,start:h50Clock(e.start),end:h50Clock(e.end)}}
-function h50ParseIcs(text){const src=h50IcsUnfold(text),blocks=src.split('BEGIN:VEVENT').slice(1),events=[];
- blocks.forEach(block=>{const body=block.split('END:VEVENT')[0],lines=body.split('\n'),bag={};
-  lines.forEach(line=>{const i=line.indexOf(':');if(i<1)return;const key=line.slice(0,i).split(';')[0].toUpperCase();bag[key]=line.slice(i+1)});
-  const start=h50IcsWhen(bag.DTSTART),end=h50IcsWhen(bag.DTEND);
-  if(!start)return;events.push({date:start.date,title:h50IcsText(bag.SUMMARY||'Busy'),start:start.time,end:end&&end.date===start.date?end.time:''})});
- return events}
-function h50ParseJson(text){let data;try{data=JSON.parse(text)}catch(e){return null}
- const list=Array.isArray(data)?data:(data&&Array.isArray(data.events)?data.events:null);if(!list)return null;
- return list.map(e=>({date:e&&e.date,title:e&&e.title,start:e&&e.start,end:e&&e.end}))}
-function h50ParseCalendar(text,now){const raw=String(text||'').trim();if(!raw)return {ok:false,error:'The calendar text was empty. Your logs were not changed.'};
- const looks=raw.charAt(0)==='{'||raw.charAt(0)==='['||/BEGIN:VCALENDAR|BEGIN:VEVENT/i.test(raw);
- if(!looks)return {ok:false,error:'That text is not a calendar file this app can read. Your logs were not changed.'};
- const parsed=raw.charAt(0)==='{'||raw.charAt(0)==='['?h50ParseJson(raw):h50ParseIcs(raw);
- if(!parsed)return {ok:false,error:'That text is not a calendar file this app can read. Your logs were not changed.'};
- const kept=[],seen=new Set();let skipped=0;
- parsed.forEach(e=>{const row=h50KeepEvent(e);if(!row){skipped++;return}const k=row.date+'|'+row.start+'|'+row.title;if(seen.has(k))return;seen.add(k);kept.push(row)});
- kept.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.start||'').localeCompare(b.start||''));
- const events=kept.slice(0,200);skipped+=kept.length-events.length;
- return {ok:true,cal:{importedAt:+now||Date.now(),source:'file',events,skipped}}}
-function h50CalFresh(cal){if(!cal||!cal.importedAt)return {empty:true,n:0,span:'',text:'No calendar snapshot on this phone. Not live. Import a file to save a copy, then refresh by reimporting.'};
- const events=Array.isArray(cal.events)?cal.events:[],dates=events.map(e=>e.date).filter(h50Iso).sort();
- const when=new Date(cal.importedAt),local=isNaN(+when)?'unknown time':when.toLocaleString();
- const span=dates.length?dates[0]+' to '+dates[dates.length-1]:'';
- const n=events.length;
- return {empty:false,n,span,text:'Imported '+local+', not live, refresh by reimporting. '+n+' event'+(n===1?'':'s')+(span?', '+span:'')+'.'}}
-function h50EventLine(e){const t=e.start?(h50Esc(e.start)+(e.end?' to '+h50Esc(e.end):'')+' '):'';
- return `<li>${t}${h50Esc(e.title)}</li>`}
+function h50MoveLabelPut(state,text){const h=h50Bag(state,true);const v=String(text||'').replace(/\s+/g,' ').trim().slice(0,80);if(v)h.moveLabel=v;else delete h.moveLabel;return true}
 
 function h50Counts(state,dates){const c={complete:0,partial:0,none:0,unknown:0,total:dates.length},food=[];
  dates.forEach(d=>{const f=h50Food(state,d);c[f.status]++;food.push(f)});
@@ -175,7 +149,8 @@ function h50CoachText(state,weekId,opts,asOf){
   'Weight: '+weight,
   'Completed sessions on file: '+on,
   'Training notes: planned training '+tr.plan+', planned rest '+tr.rest+', clinic-restricted '+tr.clinic+', medical rest '+tr.medical+', unknown '+tr.unknown,
-  'Program plans and calendar events are not counted as completed.',
+  'Program plans are not counted as completed. Checks are self-confirmed and do not add records.',
+  'Workout checks this week: '+h50WeekChecked(state,week)+'. There is no daily workout requirement.',
   'No session is marked missed. Blank days stay unknown.'];
  const steps=h50StepGoal(h);
  lines.push('Step baseline: '+(steps.baseline==null?'not set':String(steps.baseline)),'Step goal: '+(steps.goal==null?'not set':String(steps.goal)));
@@ -205,19 +180,29 @@ function holidayEntry(){const t=typeof today==='function'?today():H50_START,n=h5
 function h50Paint(){const y=window.scrollY;renderHoliday();window.scrollTo(0,y)}
 function h50Open(iso){if(!h50Index(iso))return;h50Sel=iso;h50Paint()}
 function h50ShiftDay(n){const d=h50Shift(h50Selected(),n);if(h50Index(d))h50Open(d)}
+function h50Dot(on,part,letter){return `<i class="${on?'on':part?'part':''}">${letter}</i>`}
+function h50Grid(){const label=h50Read(S).moveLabel||'';
+ return `<div class="card" id="h50grid"><h3>Challenge tracker</h3><p class="muted">Built-in tracker for all 50 days. M is optional movement${label?' ('+h50Esc(label)+')':''}. W is a workout you checked. F is a food day you confirmed complete. R is a reflection you checked. An empty box is not a miss.</p><p class="muted">These daily checks are separate from your weekly program. A planned workout does not check W. A finished workout on file does not check it either.</p>${H50_WEEKS.map(w=>{const n=h50WeekChecked(S,w);const cells=h50Range(w.start,w.end).map(d=>{const m=h50Marks(S,d),rest=m.train==='rest'||m.train==='clinic'||m.train==='medical';
+  const tag=m.train==='medical'?'Medical':m.train==='clinic'?'Clinic':m.train==='rest'?'Rest':'';
+  return `<button type="button" class="h50cell${d===h50Selected()?' on':''}${m.before?' before':''}${rest?' rest':''}" data-day="${d}" aria-pressed="${d===h50Selected()?'true':'false'}" aria-label="${h50Esc(h50Nice(d))}${m.before?'. Before you started.':''}${m.move?' Movement checked.':' Movement open.'}${m.workout?' Workout checked.':' Workout open.'}" onclick="h50Open('${d}')"><b>${h50Date(d).getDate()}</b><small>${h50Date(d).toLocaleDateString('en-US',{weekday:'narrow'})}</small><span class="h50dots" aria-hidden="true">${h50Dot(m.move,0,'M')}${h50Dot(m.workout,0,'W')}${h50Dot(m.food==='complete',m.food==='partial','F')}${h50Dot(m.reflect,0,'R')}</span>${tag?`<em>${tag}</em>`:''}</button>`}).join('');
+  return `<div class="h50wk"><div class="h50wkhead"><b>Week ${w.id}</b><span>Workouts checked: ${n}. Not a daily requirement.</span></div><div class="h50cells">${cells}</div></div>`}).join('')}</div>`}
+function h50CheckButtons(iso){const m=h50Marks(S,iso);
+ const btn=(key,on,label)=>`<button type="button" class="chip${on?' on':''}" data-check="${key}" aria-pressed="${on?'true':'false'}" onclick="h50Toggle('${iso}','${key}')">${label}</button>`;
+ return `<div class="trwin" id="h50checks" role="group" aria-label="Self-confirmed checks">${btn('move',m.move,'Movement')}${btn('workout',m.workout,'Workout done')}${btn('reflect',m.reflect,'Reflection')}</div><p class="muted">Self-confirmed. Uncheck any box to correct it. These boxes do not add food, weight, or workout records.</p>`}
 
 function renderHoliday(){
  const iso=h50Selected(),week=h50Week(iso),h=h50Read(S),modelFood=h50Food(S,iso),on=h50OnFile(S,iso),plan=h50Program(S,iso);
- const day=h.days[iso]||{},train=h50Train(day.train),events=h50EventsOn(h,iso),before=h50Before(h,iso),n=h50Index(iso);
+ const day=h.days[iso]||{},train=h50Train(day.train),before=h50Before(h,iso),n=h50Index(iso);
  const flex=(h.flex||[]).filter(f=>week&&f.date>=week.start&&f.date<=week.end);
- const steps=h50StepGoal(h),fresh=h50CalFresh(h.cal),wk=h.weeks[week.id]||{};
+ const steps=h50StepGoal(h),wk=h.weeks[week.id]||{};
  const asOf=typeof today==='function'?today():iso,win=h50Win(week.saturday);
  const wA=win?h50Weight(S.weights,win.start,win.end):null,prev=win?H50_WINS.find(w=>w.id===win.id-1):null;
  const wB=prev?h50Weight(S.weights,prev.start,prev.end):null,unit=S.settings&&S.settings.unit==='kg'?'kg':'lb';
  const g=S.settings||{};
  $('#holiday').innerHTML=`
  <div class="ovh"><small class="muted">Nov 5 to Dec 24, 2026</small><div class="ovt"><h2>Holiday 50</h2><span class="h50count">Day ${n} of 50</span></div>
- <p class="muted">Calendar day ${n} of 50, ${h50Esc(h50Nice(iso))}. This count is the date, not a score. A quiet day does not reset anything.</p></div>
+ <p class="muted">Day ${n} of 50, ${h50Esc(h50Nice(iso))}. This count is the date, not a score. A quiet day does not reset anything.</p></div>
+ ${h50Grid()}
  <details class="card h50def"><summary>How weeks are counted</summary>
  <p>Check-in weeks follow the calendar. Week 1 is Thu Nov 5 to Sun Nov 8. Weeks 2 to 6 are Monday to Sunday. Week 7 is Mon Dec 14 to Thu Dec 24, so it is longer. Saturday is the check-in day, and you can fill it later.</p>
  <p>Weight uses other windows: seven blocks of 7 days from Thu Nov 5 through Wed Dec 23. Dec 24 stays on its own. A change is shown only when both windows have at least 3 weigh-ins. Days without a weigh-in are left out.</p>
@@ -235,9 +220,13 @@ function renderHoliday(){
   <p>${plan?'Planned in your program: '+h50Esc(plan.name)+'. A plan is not a completed workout.':'No weekday program is saved, so nothing is shown as planned.'}</p>
   <p>${on.any?'Completed session on file'+(on.sessions[0]&&on.sessions[0].day?': '+h50Esc(on.sessions[0].day)+'.':'.')+' There is no time minimum.':'No completed session on file. That is unknown, not a missed session.'}</p>
   <div class="trwin" role="group" aria-label="Training note">${[['unknown','Unknown'],['plan','Planned training'],['rest','Planned rest'],['clinic','Clinic-restricted'],['medical','Medical rest']].map(([v,l])=>`<button type="button" class="chip${train===v?' on':''}" aria-pressed="${train===v?'true':'false'}" onclick="h50TrainSet('${iso}','${v}')">${l}</button>`).join('')}</div>
-  <p class="muted">${train==='medical'?'Medical rest. No steps or workout are required. A blank session stays unknown.':train==='clinic'?'Clinic-restricted. This does not mean a walk or a row is allowed.':train==='rest'?'Planned rest. This is a choice, not a failed day.':train==='plan'?'Planned training. The plan is not a completed session.':'No training note yet. An unrecorded session stays unknown.'}</p>
-  ${events.length?`<p class="muted">Saved calendar, planned, not completed.</p><ul class="h50ev">${events.map(h50EventLine).join('')}</ul>`:''}
-  <label>Steps today, optional<input id="h50st" inputmode="numeric" value="${isFinite(+day.steps)?day.steps:''}" onchange="h50StepsSet('${iso}',this.value)"></label>
+  <p class="muted">${train==='medical'?'Medical rest. No steps or workout are required. A blank session stays unknown. Empty checks are not a miss.':train==='clinic'?'Clinic-restricted. This does not mean a walk or a row is allowed. Empty checks are not a miss.':train==='rest'?'Planned rest. This is a choice, not a failed day.':train==='plan'?'Planned training. The plan is not a completed session.':'No training note yet. An unrecorded session stays unknown.'}</p>
+  ${h50CheckButtons(iso)}
+  <p class="muted">Food complete is only the logging choice above. Historical days stay Unknown until you choose. Weight is not one of the checks.</p>
+  <p class="muted">${h50DayWeight(S.weights,iso,unit)}. ${h50Esc(h.moveLabel?('Movement, in your words: '+h.moveLabel):'You can name your movement below. There is no default.')}</p>
+  <label>Weight for this date, optional<input id="h50wt" inputmode="decimal" placeholder="Leave blank to add nothing"></label>
+  <button type="button" class="btn sec" onclick="h50WeightSave()">Save weight in the weight log</button>
+  <label>Movement, in your words, optional<input id="h50mlabel" maxlength="80" value="${h50Esc(h.moveLabel||'')}" onchange="h50MoveLabelSet(this.value)" placeholder="Only if you want a name for it"></label>
   <label>One-line reflection, optional<input id="h50note" maxlength="280" value="${h50Esc(day.note||'')}" onchange="h50NoteSet('${iso}',this.value)"></label>
   <label>Context tag, optional<select aria-label="Context tag" onchange="h50ContextSet('${iso}',this.value)">${[['','None'],['cycle','Cycle'],['travel','Travel'],['event','Event'],['other','Other']].map(([v,l])=>`<option value="${v}"${(day.context||'')===v?' selected':''}>${l}</option>`).join('')}</select></label>
   <p class="muted">A context tag does not explain a weight change.</p>
@@ -262,15 +251,7 @@ function renderHoliday(){
   <button type="button" class="btn sec" onclick="h50FlexAdd()">Add planned meal</button></div>
  <div class="card"><h3>Movement goal</h3><p class="muted">Step baseline is unknown until you enter one. There is no default of 7,000, and a goal is saved only after a baseline. The usual program stays Thu Push, Fri Pull, Sat Legs, and Sun Conditioning. Nothing here adds extra sessions.</p>
   <label>Baseline, optional<input id="h50base" inputmode="numeric" value="${steps.baseline==null?'':steps.baseline}" onchange="h50BaseSet(this.value)"></label>
-  <label>Goal, optional<input id="h50goal" inputmode="numeric" value="${steps.goal==null?'':steps.goal}" onchange="h50GoalSet(this.value)"></label></div>
- <div class="card" id="h50cal"><h3>Calendar</h3>
-  <p id="h50fresh">${h50Esc(fresh.text)}</p>
-  <p class="muted">A live Google Calendar connection is not set up. It needs a separate Google Cloud project, the Calendar API, consent, and a Web client for this site. No client ID is in this app. A file you import is a saved copy on this phone. Importing does not change or delete calendar events. Extra events stay planned items, separate from a completed workout.</p>
-  ${fresh.empty?'':`<ul class="h50ev">${(h.cal.events||[]).slice(0,12).map(h50EventLine).join('')}</ul>${(h.cal.events||[]).length>12?'<p class="muted">Showing 12 of '+(h.cal.events||[]).length+'.</p>':''}${h.cal.skipped?'<p class="muted">'+h.cal.skipped+' events were outside Nov 1 to Dec 31, 2026, or past the 200 item cap, and were not stored. The calendar itself was not changed.</p>':''}`}
-  <label class="btn sec file">Import calendar file<input type="file" accept=".ics,.json,text/calendar,application/json" hidden onchange="h50CalFile(this)"></label>
-  <label>Or paste a calendar file<textarea id="h50calp" rows="4" placeholder="Paste .ics or JSON"></textarea></label>
-  <button type="button" class="btn sec" onclick="h50CalPaste()">Save pasted copy</button>
-  ${fresh.empty?'':`<button type="button" class="btn sec" onclick="h50CalClear()">Clear saved copy</button>`}</div>`;
+  <label>Goal, optional<input id="h50goal" inputmode="numeric" value="${steps.goal==null?'':steps.goal}" onchange="h50GoalSet(this.value)"></label></div>`;
 }
 function h50WeightLine(win,wA,wB,asOf,unit){
  if(!win)return 'Dec 24 is not inside a 7-day weight window.';
@@ -295,15 +276,15 @@ function h50FlexAdd(){const date=$('#h50fd')?$('#h50fd').value:'',label=$('#h50f
 function h50FlexRemove(id){h50FlexDel(S,id);save();h50Paint()}
 function h50BaseSet(v){const res=h50BaselinePut(S,v);if(!res.ok){toast(res.error);return}save();toast(res.baseline==null?'Baseline cleared.':'Baseline saved. There is still no default goal.')}
 function h50GoalSet(v){const res=h50GoalPut(S,v);if(!res.ok){toast(res.error);return}save();toast('Goal saved on this phone.')}
-function h50CalFile(input){const f=input.files&&input.files[0];if(!f)return;const r=new FileReader();r.onload=()=>h50CalSave(String(r.result||''),f.name);r.readAsText(f)}
-function h50CalPaste(){h50CalSave($('#h50calp')?$('#h50calp').value:'','paste')}
-function h50CalSave(text){const before=JSON.stringify({log:S.log,sessions:S.sessions,weights:S.weights,settings:S.settings});
- const res=h50ParseCalendar(text,Date.now());if(!res.ok){toast(res.error);return}
- const after=JSON.stringify({log:S.log,sessions:S.sessions,weights:S.weights,settings:S.settings});
- if(before!==after){toast('Import stopped because shared logs would have changed.');return}
- h50Write().cal=res.cal;
- save();h50Paint();toast('Saved a calendar copy on this phone. The calendar itself was not changed.')}
-function h50CalClear(){if(!confirm('Remove the saved calendar copy from this phone? The calendar itself is not changed.'))return;delete h50Write().cal;save();h50Paint()}
+function h50Toggle(iso,key){const day=(h50Read(S).days||{})[iso]||{};const on=!(day.checks&&day.checks[key]);const res=h50CheckPut(S,iso,key,on);
+ if(!res.ok){toast(res.error||'That check did not save.');return}save();h50Paint()}
+function h50MoveLabelSet(v){h50MoveLabelPut(S,v);save()}
+function h50WeightSave(){const iso=h50Selected(),raw=$('#h50wt')?String($('#h50wt').value||'').trim():'';
+ if(!raw){toast('No weight entered. Nothing was added.');return}const w=Math.round((+raw)*10)/10;if(!(w>0)){toast('Enter a weight to save it. Nothing was added.');return}
+ const food=JSON.stringify(S.log),sessions=JSON.stringify(S.sessions),goals=JSON.stringify(S.settings);
+ S.weights=(S.weights||[]).filter(x=>!x||x.d!==iso);S.weights.push({d:iso,w});S.weights.sort((a,b)=>a.d<b.d?-1:1);
+ if(JSON.stringify(S.log)!==food||JSON.stringify(S.sessions)!==sessions||JSON.stringify(S.settings)!==goals){toast('Stopped. Saved logs would have changed.');return}
+ save();h50Paint();toast('Weight saved in your weight log.')}
 function h50Copy(opts){if(opts)h50CopyOpts=Object.assign({context:false,priv:false},opts);const week=h50Week(h50Selected());
  const text=h50CoachText(S,week.id,h50CopyOpts,typeof today==='function'?today():h50Selected());window.__coachText=text;
  modal(`<h3>Copy for Coach</h3><p class="muted">This is the text that will be copied. Context tags and private notes stay off unless you include them.</p>

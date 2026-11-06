@@ -21,9 +21,15 @@ function report(kind,map){
 }
 report('function',fns);
 report('binding',lex);
-if(!fns.has('renderHoliday')||!fns.has('trendSetStatus')||!fns.has('h50ParseCalendar')){
+if(!fns.has('renderHoliday')||!fns.has('trendSetStatus')||!fns.has('h50CheckPut')){
   fail++;
   console.error('expected new globals were not found');
+}
+const banned=/accounts\.google|googleapis|gsi\/client|oauth2|access_token|refresh_token|client_secret|YOUR_CLIENT_ID/i;
+for(const file of ['holiday.js','app.js','index.html','sw.js','gcal.js']){
+  const p=path.join(root,file);
+  if(!fs.existsSync(p))continue;
+  if(banned.test(fs.readFileSync(p,'utf8'))){fail++;console.error('oauth residue in '+file)}
 }
 console.log(fail?`failed ${fail}`:`passed, ${fns.size} functions and ${lex.size} top-level bindings`);
 process.exit(fail?1:0);
