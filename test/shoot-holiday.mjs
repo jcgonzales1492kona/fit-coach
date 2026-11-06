@@ -1,0 +1,81 @@
+const {chromium}=await import(process.env.PW||'playwright-core');
+import {spawn} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const out=process.argv[2]||'/opt/cursor/artifacts';
+fs.mkdirSync(out,{recursive:true});
+const port=4179;
+const server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],{cwd:root,stdio:'ignore'});
+await new Promise(r=>setTimeout(r,400));
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
+const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,serviceWorkers:'block'});
+await context.grantPermissions(['clipboard-read','clipboard-write']);
+const page=await context.newPage();
+const errors=[];
+page.on('pageerror',e=>errors.push(String(e)));
+page.on('console',m=>{if(m.type()==='error'&&!/404|favicon/i.test(m.text()))errors.push(m.text())});
+function fail(msg){console.error(msg);process.exitCode=1}
+
+await page.goto(`http://127.0.0.1:${port}/test/holiday-harness.html`,{waitUntil:'domcontentloaded'});
+await page.waitForFunction(()=>document.documentElement.dataset.ready==='1',{timeout:15000});
+const text=await page.locator('body').innerText();
+for(const s of ['Sample data. Not a real log.','Day 2 of 50','Pull','Sample push','not a completed workout','Imported','not live, refresh by reimporting','2 events','Saved goals','1720','not marked medically approved','no default of 7,000']){
+  if(!text.includes(s))fail('holiday view missing: '+s);
+}
+if(/[\u2013\u2014]/.test(text))fail('dash in holiday view');
+if(/cheat|perfect day|catch up/i.test(text))fail('graded copy leaked');
+const overflow=await page.evaluate(()=>({sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth}));
+if(overflow.sw>overflow.cw+1)fail('horizontal overflow '+JSON.stringify(overflow));
+await page.evaluate(()=>window.scrollTo(0,0));
+await page.screenshot({path:path.join(out,'holiday_day.png')});
+await page.locator('#h50move').evaluate(el=>el.scrollIntoView({block:'start'}));
+await page.evaluate(()=>window.scrollBy(0,-64));
+await page.screenshot({path:path.join(out,'holiday_movement.png')});
+await page.locator('#h50cal').scrollIntoViewIfNeeded();
+await page.screenshot({path:path.join(out,'holiday_calendar.png')});
+await page.locator('#h50-copy').click();
+await page.waitForSelector('#h50-preview');
+const preview=await page.locator('#h50-preview').innerText();
+if(preview.includes('Sample private line'))fail('private note copied before opt-in');
+if(!preview.includes('Private notes are not included.'))fail('preview did not withhold private notes');
+if(!preview.includes('1 complete'))fail('preview missing coverage');
+await page.locator('#h50-inc-priv').check();
+await page.waitForSelector('#h50-preview');
+const shown=await page.locator('#h50-preview').innerText();
+if(!shown.includes('Sample private line'))fail('opt-in private note missing');
+await page.screenshot({path:path.join(out,'holiday_copy_preview.png')});
+await page.evaluate(()=>closeModal());
+
+const food=JSON.stringify(await page.evaluate(()=>S.log));
+await page.locator('#h50day .trwin button',{hasText:'Medical rest'}).click();
+const after=await page.evaluate(()=>({log:JSON.stringify(S.log),kcal:S.settings.kcal,sessions:S.sessions.length,train:S.holiday50.days['2026-11-06'].train}));
+if(after.log!==food||after.kcal!==1720||after.sessions!==1)fail('training note changed shared logs '+JSON.stringify(after));
+if(after.train!=='medical')fail('medical rest did not save');
+const med=await page.locator('#h50day').innerText();
+if(!med.includes('No steps or workout are required'))fail('medical rest copy missing');
+if(/missed a workout|catch up/i.test(med))fail('medical rest warns like a miss');
+
+await context.close();
+const fresh=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,serviceWorkers:'block'});
+const app=await fresh.newPage();
+const appErrors=[];
+app.on('pageerror',e=>appErrors.push(String(e)));
+app.on('console',m=>{if(m.type()==='error'&&!/404|favicon/i.test(m.text()))appErrors.push(m.text())});
+await app.goto(`http://127.0.0.1:${port}/index.html#holiday`,{waitUntil:'domcontentloaded'});
+await app.waitForSelector('#h50cal');
+const empty=await app.locator('#holiday').innerText();
+if(!empty.includes('No calendar snapshot')||!empty.includes('Not live')||!empty.includes('No client ID'))fail('empty calendar copy is wrong');
+if(/[\u2013\u2014]/.test(empty))fail('dash in empty holiday');
+const wide=await app.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth+1);
+if(wide)fail('empty holiday overflows at 390px');
+await app.evaluate(()=>window.scrollTo(0,0));
+await app.screenshot({path:path.join(out,'holiday_empty.png')});
+if(errors.length)fail('harness errors '+errors.join(' | '));
+if(appErrors.length)fail('app errors '+appErrors.join(' | '));
+console.log(process.exitCode?'done with failures':'holiday browser checks passed');
+await browser.close();
+server.kill();
+process.exit(process.exitCode||0);

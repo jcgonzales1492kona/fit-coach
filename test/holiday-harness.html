@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FitCoach holiday preview</title>
+<link rel="stylesheet" href="../style.css?v=40">
+<style>
+ #sample{margin:0;padding:8px 14px;background:#2c2c2e;color:#f2f2f7;font:600 13px/1.4 -apple-system,sans-serif}
+</style>
+<script>
+(function(){
+  var mem=new Map();
+  var fake={
+    getItem:function(k){return mem.has(k)?mem.get(k):null},
+    setItem:function(k,v){mem.set(String(k),String(v))},
+    removeItem:function(k){mem.delete(k)},
+    clear:function(){mem.clear()},
+    key:function(i){return Array.from(mem.keys())[i]||null},
+    get length(){return mem.size}
+  };
+  window.__holidayShim=false;
+  try{Object.defineProperty(window,'localStorage',{configurable:true,get:function(){return fake}});window.__holidayShim=true}catch(e){}
+  try{window.indexedDB={open:function(){var r={};setTimeout(function(){if(r.onerror)r.onerror(new Event('error'))},0);return r},deleteDatabase:function(){return {}}}}catch(e){}
+})();
+</script>
+</head>
+<body>
+<p id="sample">Sample data. Not a real log.</p>
+<header>FitCoach</header>
+<main><section id="food" class="tab"></section><section id="workout" class="tab" hidden></section><section id="cond" class="tab" hidden></section><section id="holiday" class="tab" hidden></section><section id="progress" class="tab" hidden></section><section id="settings" class="tab" hidden></section></main>
+<nav><button data-t="food">🍽️<span>Food</span></button><button data-t="workout">🏋️<span>Workout</span></button><button data-t="cond">🚣<span>Conditioning</span></button><button data-t="holiday">🗓️<span>Holiday</span></button><button data-t="progress">📈<span>Progress</span></button><button data-t="settings">⚙️<span>Settings</span></button></nav>
+<div id="kp" hidden></div><div id="modal" hidden></div>
+<script>
+(function(){
+  if(!window.__holidayShim){document.body.innerHTML='<p style="color:#fff;padding:24px">This preview did not start, so it will not touch saved FitCoach data.</p>';return}
+  var files=['data.js','body.js','cond.js','goals.js','meals.js','slots.js','edit.js','trends.js','holiday.js','app.js','scan.js'];
+  var i=0;
+  function next(){
+    if(i>=files.length){seed();return}
+    var s=document.createElement('script');
+    s.src='../'+files[i]+'?v=40';
+    s.onload=function(){i++;next()};
+    s.onerror=function(){document.body.insertAdjacentHTML('beforeend','<p style="color:#ffb340;padding:16px">Could not load '+files[i]+'</p>')};
+    document.body.appendChild(s);
+  }
+  function seed(){
+    var logBefore=JSON.stringify(S.log);
+    S.settings.kcal=1720;
+    S.settings.p=145;
+    S.log={'2026-11-06':[
+      {name:'Sample oats',slot:'b',kcal:420,p:30,c:40,f:8,g:100,mealAt:'08:00'},
+      {name:'Sample rice bowl',slot:'l',kcal:680,p:45,c:70,f:12,g:100,mealAt:'12:30'}
+    ]};
+    S.logStatus={'2026-11-06':'complete'};
+    S.weights=[{d:'2026-11-06',w:184.2}];
+    S.sessions=[{date:'2026-11-06',day:'Sample push',sets:[{ex:'Sample press',w:40,r:8}]}];
+    S.meso={program:1,schedule:['Rest','Rest','Rest','Push','Pull','Legs','Cond'],plan:[],week:0,day:0};
+    S.myPlan={name:'Sample plan',schedule:S.meso.schedule,days:[]};
+    S.holiday50={v:1,enrolled:'2026-11-06',days:{
+      '2026-11-05':{note:'Optional note from before the start'},
+      '2026-11-06':{note:'Logged lunch before the meeting',privateNote:'Sample private line'}
+    },weeks:{1:{habits:'Logged two meals',obstacle:'A long meeting',adjust:'Pack lunch tonight'}},flex:[{id:'f1',date:'2026-11-07',label:'Sample dinner out'}],steps:{},
+    cal:{importedAt:Date.UTC(2026,10,6,15,0,0),source:'file',events:[
+      {date:'2026-11-06',title:'Sample appointment',start:'15:00',end:'15:30'},
+      {date:'2026-11-08',title:'Extra conditioning',start:'09:00',end:'09:30'}
+    ],skipped:0}};
+    if(JSON.stringify(S.log)==='{}')throw new Error('seed lost the food log');
+    h50Sel='2026-11-06';
+    show('holiday');
+    var text=document.getElementById('holiday').innerText;
+    if(!text.includes('Day 2 of 50'))throw new Error('day count');
+    if(!text.includes('Planned in your program: Pull'))throw new Error('plan label');
+    if(!text.includes('Sample push'))throw new Error('session on file');
+    if(!text.includes('not a completed workout'))throw new Error('plan copy');
+    if(text.includes('<')&&text.includes('onerror'))throw new Error('markup leaked');
+    if(logBefore&&logBefore!=='{}'&&!S.log['2026-11-06'])throw new Error('food replaced');
+    document.documentElement.dataset.ready='1';
+  }
+  next();
+})();
+</script>
+</body>
+</html>

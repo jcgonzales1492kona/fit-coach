@@ -14,6 +14,7 @@ function entryEdit(i){const e=(S.log[viewDate]||[])[i];if(!e)return;slotSel=e.sl
   :(f?`<p class="muted">${f.kcal} kcal · P${f.p} C${f.c} F${f.f} per 100g</p>`:'<p class="muted">This food was deleted. Numbers scale from what was logged.</p>');
  modal(`<h3>${esc(e.name)}${e.meal?' <i class="sbadge mbadge">Meal</i>':''}</h3>${info}${f&&foodLow(f)?lowWarn(f):''}${amt}<p id="eprev" class="muted"></p>
  <div class="slots" role="radiogroup" aria-label="Meal">${SLOT_ORDER.map(s=>`<button type="button" class="chip slp ${s===slotSel?'on':''}" data-s="${s}" onclick="slotChoose('${s}')">${SLOT_NAMES[s]}</button>`).join('')}</div>
+ <label>Eaten at, optional<input id="ema" type="time" value="${esc(e.mealAt||'')}"></label><p class="muted">The time you ate, if you know it. Leave it blank if you do not. The time the entry was saved is not used.</p>
  <div class="inl"><button class="btn" id="esave" onclick="entrySave(${i})">Save</button><button class="btn sec danger" onclick="entryDel(${i})">Delete</button></div>${cust&&!foodLow(f)?`<div><button class="link" onclick="fixLabelForm('${f.id}')">✎ Fix from label</button></div>`:''}`);entryPrev(i)}
 function entryStep(d,i){const el=$('#esv'),v=Math.max(0.5,Math.round(((+el.value||0)+d)*2)/2);el.value=v;entryPrev(i)}
 function entryCalc(e){if(e.meal){const n=+$('#esv').value;if(!(n>0))return null;const m=mealById(e.meal);
@@ -22,7 +23,7 @@ function entryCalc(e){if(e.meal){const n=+$('#esv').value;if(!(n>0))return null;
  if(f){const k=g/100;return{g,kcal:f.kcal*k,p:f.p*k,c:f.c*k,f:f.f*k}}const k=e.g>0?g/e.g:1;return{g,kcal:e.kcal*k,p:e.p*k,c:e.c*k,f:e.f*k}}
 function entryPrev(i){const e=S.log[viewDate][i],v=entryCalc(e),el=$('#eprev');if(el)el.textContent=v?`${Math.round(v.kcal)} kcal · P${r1(v.p)} C${r1(v.c)} F${r1(v.f)}`:'Enter an amount.'}
 function entrySave(i){const e=(S.log[viewDate]||[])[i];if(!e)return;const v=entryCalc(e);if(!v){toast('Enter an amount above 0.',2500);return}
- Object.assign(e,v);if(SLOT_NAMES[slotSel])e.slot=slotSel;slotSel=null;save();closeModal();renderFood();toast(`Updated ${e.name}.`,2500)}
+ Object.assign(e,v);if(SLOT_NAMES[slotSel])e.slot=slotSel;const mt=$('#ema')?$('#ema').value:'';if(/^\d{2}:\d{2}$/.test(mt))e.mealAt=mt;else delete e.mealAt;slotSel=null;save();closeModal();renderFood();toast(`Updated ${e.name}.`,2500)}
 function entryDel(i){const e=(S.log[viewDate]||[])[i];if(!e||!confirm(`Delete ${e.name} from your log?`))return;S.log[viewDate].splice(i,1);save();closeModal();renderFood();toast(`Deleted ${e.name}.`,2500)}
 /* ---- weigh-ins ---- */
 function wFmt(d){return new Date(d+'T12:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}

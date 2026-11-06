@@ -1,7 +1,11 @@
-/* Food trends. Reads the log, weigh-ins, and settings. Adds S.cycleDays only when a day is marked.
-   Does not migrate, rewrite, or delete existing logs, weights, meals, or settings. */
+/* Food trends. Reads the log, weigh-ins, settings, and S.logStatus.
+   A day is Complete, Partial, or Not logged only when the user says so.
+   A missing status is Unknown, including older dates and today.
+   Calories and protein averages use confirmed complete days only.
+   Missing days are left out. They are not stored as zero.
+   This file does not rewrite logs, weights, meals, or settings. */
 let trendWin=7;
-const TREND_LB=0.45359237;
+const TREND_LB=0.45359237,TREND_W_MIN=3;
 function trendN(n){return Math.round(n).toLocaleString('en-US')}
 function trendR1(x){return Math.round(x*10)/10}
 function trendEsc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -18,156 +22,153 @@ function trendMD(iso,year){return trendDate(iso).toLocaleDateString('en-US',year
 function trendRange(a,b){const same=a.slice(0,4)===b.slice(0,4);return trendMD(a,!same)+' to '+trendMD(b,true)}
 function trendWd(iso){return trendDate(iso).toLocaleDateString('en-US',{weekday:'short'})}
 
+function trendStatus(map,date){const v=map&&map[date];return v==='complete'||v==='partial'||v==='none'?v:'unknown'}
+function trendApplyStatus(state,date,status){
+ if(!state||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+ const before=JSON.stringify(state.log||null);
+ state.logStatus||={};
+ if(status==='unknown')delete state.logStatus[date];
+ else if(status==='complete'||status==='partial'||status==='none')state.logStatus[date]=status;
+ else return false;
+ return JSON.stringify(state.log||null)===before}
 function trendEntries(log,date){const v=log&&log[date];return Array.isArray(v)?v.filter(Boolean):[]}
-function trendDay(log,date){
+function trendMealMin(v){const m=/^(\d{1,2}):(\d{2})$/.exec(String(v||'').trim());if(!m)return null;const h=+m[1],min=+m[2];if(h>23||min>59)return null;return h*60+min}
+function trendDay(log,date,map){
  const entries=trendEntries(log,date);
- if(!entries.length)return {date,status:'unlogged',kcal:0,p:0,meals:0,snack:0,evening:0,timed:0,untimed:0,n:0};
- let kcal=0,p=0,snack=0,evening=0,timed=0,untimed=0;const slots=new Set();
- entries.forEach(e=>{const k=+e.kcal||0,pr=+e.p||0;kcal+=k;p+=pr;
-  const slot=e.slot&&SLOT_NAMES[e.slot]?e.slot:'s';slots.add(slot);if(slot==='s')snack+=k;
-  if(e.t==null||e.t===''){untimed++;return}
-  const dt=new Date(e.t);if(isNaN(dt.getTime())){untimed++;return}
-  timed++;if(dt.getHours()*60+dt.getMinutes()>=19*60)evening+=k});
- const status=slots.size>=2&&Math.round(kcal)>=1000?'logged':'partial';
- return {date,status,kcal,p,meals:slots.size,snack,evening,timed,untimed,n:entries.length}}
+ let kcal=0,p=0,snack=0,timed=0,untimed=0,evening=0;
+ entries.forEach(e=>{const k=+e.kcal||0,pr=+e.p||0;kcal+=k;p+=pr;if(e.slot==='s')snack+=k;
+  const mm=trendMealMin(e.mealAt);if(mm==null){untimed++;return}timed++;if(mm>=19*60)evening+=k});
+ return {date,status:trendStatus(map,date),kcal,p,snack,n:entries.length,timed,untimed,evening}}
 function trendWeightMap(weights){const m={};(weights||[]).forEach(x=>{if(!x||!/^\d{4}-\d{2}-\d{2}$/.test(x.d||''))return;const w=+x.w;if(!isFinite(w))return;m[x.d]=w});return m}
-function trendAvg(days,key){const L=days.filter(d=>d.status==='logged');if(!L.length)return {avg:null,n:0};return {avg:L.reduce((a,d)=>a+(+d[key]||0),0)/L.length,n:L.length}}
-function trendWAvg(map,dates){const ws=dates.map(d=>map[d]).filter(v=>v!=null);if(!ws.length)return null;return ws.reduce((a,b)=>a+b,0)/ws.length}
-function trendSnackPct(days){let k=0,s=0;days.forEach(d=>{k+=d.kcal;s+=d.snack});return k>0?s/k:null}
-function trendEvePct(days){let k=0,e=0,timed=0,untimed=0;days.forEach(d=>{k+=d.kcal;e+=d.evening;timed+=d.timed;untimed+=d.untimed});if(!timed)return {pct:null,untimed};return {pct:k>0?e/k:null,untimed}}
-function trendHits(days){return days.filter(d=>Math.round(d.p)>=130).length}
-function trendHot(days,target){return days.filter(d=>Math.round(d.kcal)>target+400)}
-function trendSnackDays(days){return days.filter(d=>d.kcal>0&&d.snack/d.kcal>0.25)}
-function trendGap(days){let recent=null,cur=[];days.forEach(d=>{if(d.status!=='logged')cur.push(d);else{if(cur.length>=2)recent=cur.slice();cur=[]}});if(cur.length>=2)recent=cur.slice();return recent}
-function trendJoin(names){if(names.length<=1)return names[0]||'';if(names.length===2)return names[0]+' and '+names[1];return names.slice(0,-1).join(', ')+', and '+names[names.length-1]}
+function trendCompleteAvg(days,key){const L=days.filter(d=>d.status==='complete');if(!L.length)return {avg:null,n:0};return {avg:L.reduce((a,d)=>a+(+d[key]||0),0)/L.length,n:L.length}}
+function trendPartial(days){const L=days.filter(d=>d.status==='partial');if(!L.length)return {n:0,kcal:0,p:0};return {n:L.length,kcal:L.reduce((a,d)=>a+d.kcal,0),p:L.reduce((a,d)=>a+d.p,0)}}
+function trendCoverage(days){const c={complete:0,partial:0,none:0,unknown:0,total:days.length};days.forEach(d=>c[d.status]++);return c}
+function trendWStats(map,dates){const ws=dates.map(d=>map[d]).filter(v=>v!=null&&isFinite(v));if(!ws.length)return {avg:null,n:0,enough:false};return {avg:ws.reduce((a,b)=>a+b,0)/ws.length,n:ws.length,enough:ws.length>=TREND_W_MIN}}
+function trendSnack(days){let k=0,s=0,n=0;days.forEach(d=>{k+=d.kcal;s+=d.snack;n+=d.n});return n&&k>0?s/k:null}
+function trendEvening(days){let n=0,untimed=0,k=0,e=0;days.forEach(d=>{n+=d.n;untimed+=d.untimed;k+=d.kcal;e+=d.evening});
+ if(!n)return {claim:false,pct:null,why:'No entries on file.'};
+ if(untimed)return {claim:false,pct:null,why:'Meal time is missing on some entries. Log time is not used, so evening share is not shown.'};
+ return {claim:true,pct:k>0?e/k:null,why:''}}
+function trendSaved(n){return isFinite(+n)?+n:null}
 function trendCycleMap(raw){const o={};if(!raw||typeof raw!=='object')return o;Object.keys(raw).forEach(k=>{if(/^\d{4}-\d{2}-\d{2}$/.test(k)&&raw[k])o[k]=1});return o}
-function trendAvgPhrase(avg,n,suffix){if(avg==null)return 'No logged days';return trendN(avg)+(suffix||'')+' avg over '+n+' day'+(n===1?'':'s')}
-function trendVs(cur,prior,win,suffix){if(cur==null)return '';if(prior==null)return 'No prior logged days';
- const d=Math.round(cur)-Math.round(prior),w=win===7?'prior 7\u00A0days':win===14?'prior 14\u00A0days':'prior 28\u00A0days',u=suffix||'';
- if(d===0)return 'flat vs '+w;if(d>0)return 'up '+trendN(d)+u+' vs '+w;return 'down '+trendN(-d)+u+' vs '+w}
-function trendLatestW(weights){let best=null;(weights||[]).forEach(x=>{if(!x||!/^\d{4}-\d{2}-\d{2}$/.test(x.d||'')||!isFinite(+x.w))return;if(!best||x.d>best.d)best={d:x.d,w:+x.w}});return best}
+function trendJoin(names){if(names.length<=1)return names[0]||'';if(names.length===2)return names[0]+' and '+names[1];return names.slice(0,-1).join(', ')+', and '+names[names.length-1]}
 
 function trendBuild(state,end,win){
- win=trendWinN(win);const log=state&&state.log||{},weights=state&&state.weights||[],settings=state&&state.settings||{};
- const kcalT=+settings.kcal||1720,pT=+settings.p||145,unit=settings.unit==='kg'?'kg':'lb';
+ win=trendWinN(win);const log=state&&state.log||{},weights=state&&state.weights||[],settings=state&&state.settings||{},status=state&&state.logStatus;
+ const kcalT=trendSaved(settings.kcal),pT=trendSaved(settings.p),unit=settings.unit==='kg'?'kg':'lb';
  const cycle=trendCycleMap(state&&state.cycleDays),need=Math.max(win*2,28);
- const all=trendDates(end,need).map(d=>trendDay(log,d)),by={};all.forEach(d=>by[d.date]=d);
- const cur=trendDates(end,win).map(d=>by[d]),prior=trendDates(trendShift(end,-win),win).map(d=>by[d]);
- const d7=trendDates(end,7).map(d=>by[d]),d14=trendDates(end,14).map(d=>by[d]),d21=trendDates(end,21);
- const logged7=d7.filter(d=>d.status==='logged').length,logged14=d14.filter(d=>d.status==='logged').length;
- const gapAll=trendGap(d14),recentSet=new Set(d7.map(d=>d.date));
- const gap=gapAll&&gapAll.some(d=>recentSet.has(d.date))?gapAll:null,notTracking=!!gap||logged7<5;
- const kc=trendAvg(cur,'kcal'),kp=trendAvg(cur,'p'),pc=trendAvg(prior,'kcal'),pp=trendAvg(prior,'p');
- const map=trendWeightMap(weights),wCur=trendWAvg(map,trendDates(end,7)),wPrev=trendWAvg(map,trendDates(trendShift(end,-7),7));
+ const all=trendDates(end,need).map(d=>trendDay(log,d,status)),by={};all.forEach(d=>by[d.date]=d);
+ const curDates=trendDates(end,win),cur=curDates.map(d=>by[d]);
+ const d7=trendDates(end,7).map(d=>by[d]),priorDates=trendDates(trendShift(end,-win),win);
+ const prior=priorDates.map(d=>by[d]);
+ const cov=trendCoverage(cur),kc=trendCompleteAvg(cur,'kcal'),kp=trendCompleteAvg(cur,'p');
+ const pc=trendCompleteAvg(prior,'kcal'),pp=trendCompleteAvg(prior,'p'),part=trendPartial(cur);
+ const map=trendWeightMap(weights);
+ const wCur=trendWStats(map,trendDates(end,7)),wPrev=trendWStats(map,trendDates(trendShift(end,-7),7));
  const d28=trendDates(end,28),weeks=[];
- for(let i=0;i<4;i++){const dates=d28.slice(i*7,i*7+7),ds=dates.map(x=>by[x]),a=trendAvg(ds,'kcal'),b=trendAvg(ds,'p');
-  weeks.push({start:dates[0],end:dates[6],dates,avgKcal:a.avg,avgP:b.avg,logged:a.n,weight:trendWAvg(map,dates)})}
- const wA=trendWAvg(map,d21.slice(0,7)),wB=trendWAvg(map,d21.slice(7,14)),wC=trendWAvg(map,d21.slice(14));
- const band=0.3*trendFactor(unit);
- const flat=wA!=null&&wB!=null&&wC!=null&&(Math.max(wA,wB,wC)-Math.min(wA,wB,wC))<=band+1e-6;
- const wouldStall=flat&&logged7>=6,cycleStall=d21.some(d=>cycle[d]);
- const reasons=[];
- if(gap){const kinds=new Set(gap.map(d=>d.status)),what=kinds.size===1?(gap[0].status==='unlogged'?'unlogged':'partial'):'unlogged or partial';
-  reasons.push(gap.length>4?gap.length+' days in a row were '+what+', from '+trendNice(gap[0].date)+' to '+trendNice(gap[gap.length-1].date)+'.':trendJoin(gap.map(d=>trendNice(d.date)))+' in a row were '+what+'.')}
- if(logged7<5)reasons.push('Only '+logged7+' of the last 7 days are fully logged.');
- const hot=trendHot(cur,kcalT),snackDays=trendSnackDays(cur),eve=trendEvePct(cur);
- let wSub,wCard;
- if(wCur==null){const latest=trendLatestW(weights);wSub=latest?'No weigh-in in the last 7 days. Latest '+trendR1(latest.w)+' '+unit+' on '+trendMD(latest.d)+'.':'No weigh-ins yet.';wCard=wSub}
- else{const c=trendR1(wCur);if(wPrev==null){wCard='no prior week';wSub='7-day avg, no prior week weigh-ins'}
-  else{const dlt=trendR1(c-trendR1(wPrev));wCard=dlt===0?'flat vs prior week':dlt<0?'down '+trendR1(-dlt)+' '+unit+' vs prior\u00A0week':'up '+dlt+' '+unit+' vs prior\u00A0week';wSub='7-day avg, '+(dlt===0?'flat vs prior week':dlt<0?'down '+trendR1(-dlt)+' '+unit+' vs prior week':'up '+dlt+' '+unit+' vs prior week')}}
- const cycleOn=cur.filter(d=>cycle[d.date]).map(d=>d.date);
- const stallNote=wouldStall&&cycleStall?'Cycle days are marked in this stretch, so the stall flag is off.':
-  cycleOn.length?(cycleOn.length===1?'Cycle day marked ('+trendNice(cycleOn[0])+'). ':'Cycle days marked ('+cycleOn.length+'). ')+'Marked weeks skip the stall flag.':'';
- return {end,win,kcalT,pT,unit,cur,prior,logged7,logged14,notTracking,reasons,gap,
-  avgKcal:kc.avg,loggedN:kc.n,avgP:kp.avg,priorKcal:pc.avg,priorP:pp.avg,
-  overAvg:kc.avg!=null&&Math.round(kc.avg)>kcalT+150,hot,pHits:trendHits(cur),pLow:kp.avg!=null&&Math.round(kp.avg)<125,
-  snackPct:trendSnackPct(cur),snackDays,evePct:eve.pct,eveUntimed:eve.untimed,
-  wCur,wPrev,wHead:wCur==null?'None':trendR1(wCur)+' '+unit,wSub,wCard,weeks,
-  wouldStall,stall:wouldStall&&!cycleStall,stallNote,cycle,band}}
+ for(let i=0;i<4;i++){const dates=d28.slice(i*7,i*7+7),ds=dates.map(x=>by[x]),a=trendCompleteAvg(ds,'kcal'),b=trendCompleteAvg(ds,'p'),ws=trendWStats(map,dates);
+  weeks.push({start:dates[0],end:dates[6],dates,avgKcal:a.avg,avgP:b.avg,n:a.n,pN:b.n,coverage:trendCoverage(ds),partial:trendPartial(ds),weight:ws})}
+ const snackPct=trendSnack(cur),eve=trendEvening(cur);
+ let wHead,wNote;
+ if(wCur.avg==null){wHead='None';wNote='No weigh-ins in this 7-day window.'}
+ else{wHead=trendR1(wCur.avg)+' '+unit;wNote=wCur.n+' weigh-in'+(wCur.n===1?'':'s')+' of 7 days';
+  if(!wCur.enough||!wPrev.enough)wNote+='. Not enough weigh-ins to call a trend'+(wPrev.avg==null?'':', prior window n='+wPrev.n);
+  else{const dlt=trendR1(trendR1(wCur.avg)-trendR1(wPrev.avg));wNote+=dlt===0?'. Flat vs the prior 7-day window (n='+wPrev.n+')':dlt<0?'. Down '+trendR1(-dlt)+' '+unit+' vs the prior 7-day window (n='+wPrev.n+')':'. Up '+dlt+' '+unit+' vs the prior 7-day window (n='+wPrev.n+')'}}
+ return {end,win,kcalT,pT,unit,cur,prior,cov,avgKcal:kc.avg,avgN:kc.n,avgP:kp.avg,pN:kp.n,priorKcal:pc.avg,priorN:pc.n,priorP:pp.avg,priorPN:pp.n,
+  partial:part,wCur,wPrev,wHead,wNote,weeks,snackPct,eve,cycle,band:0.3*trendFactor(unit)}}
 
-function trendSummaryText(M){
- const days=M.win===7?M.cur:null;
- const src=days||M.cur,range=trendRange(src[0].date,src[src.length-1].date);
- const hi=src.reduce((a,d)=>!a||d.kcal>=a.kcal?d:a,null);
- const un=src.filter(d=>d.status==='unlogged').map(d=>trendNice(d.date));
- const part=src.filter(d=>d.status==='partial').map(d=>trendNice(d.date));
- const lines=['FitCoach weekly summary',range,'',
-  'Days logged: '+M.logged7+'/7',
-  'Avg calories: '+(M.avgKcal==null?'no logged days':trendN(M.avgKcal)+' over '+M.loggedN+' day'+(M.loggedN===1?'':'s'))+' (target '+trendN(M.kcalT)+')',
-  'Avg protein: '+(M.avgP==null?'no logged days':Math.round(M.avgP)+' g over '+M.loggedN+' day'+(M.loggedN===1?'':'s'))+' (target '+Math.round(M.pT)+' g)',
-  'Days protein hit (130 g+): '+M.pHits+' of 7',
-  'Highest day: '+(!hi||hi.kcal<=0?'none':trendNice(hi.date)+', '+trendN(hi.kcal)+' kcal'),
-  'Snack share: '+(M.snackPct==null?'no food logged':Math.round(M.snackPct*100)+'%'),
-  'After 7 pm: '+(M.evePct==null?'no entry times':Math.round(M.evePct*100)+'%'+(M.eveUntimed?' (some entries have no time)':'')),
-  'Weight: '+(M.wCur==null?M.wSub.replace(/\.$/,''):trendR1(M.wCur)+' '+M.unit+' '+M.wSub),
-  'Unlogged: '+(un.length?un.join(', '):'none')];
- if(part.length)lines.push('Partial: '+part.join(', '));
+function trendCovLine(c){return c.complete+' complete, '+c.partial+' partial, '+c.none+' not logged, '+c.unknown+' unknown'}
+function trendGoalLine(n,unit){return n==null?'No saved goal on this phone':trendN(n)+(unit||'')+' saved goal, not marked medically approved'}
+function trendSummaryText(M,opts){
+ opts=opts||{};const src=M.cur,range=trendRange(src[0].date,src[src.length-1].date),c=M.cov;
+ const lines=['FitCoach summary',range,'',
+  'Coverage: '+trendCovLine(c)+' ('+c.total+' days)',
+  'Eligible for averages: '+M.avgN+' of '+c.total+' confirmed complete days',
+  'Calories, complete days only: '+(M.avgKcal==null?'no confirmed complete days':trendN(M.avgKcal)+' avg, n='+M.avgN),
+  'Saved calorie goal: '+(M.kcalT==null?'none on this phone':trendN(M.kcalT)+', not marked medically approved'),
+  'Protein, complete days only: '+(M.avgP==null?'no confirmed complete days':Math.round(M.avgP)+' g avg, n='+M.pN),
+  'Saved protein goal: '+(M.pT==null?'none on this phone':Math.round(M.pT)+' g, not marked medically approved'),
+  'Partial days, separate: '+(M.partial.n?'n='+M.partial.n+', '+trendN(M.partial.kcal)+' kcal and '+Math.round(M.partial.p)+' g protein on file':'none'),
+  'Unknown and not logged days are left out. Missing days are not counted as zero.',
+  'Weight, last 7 days: '+(M.wCur.avg==null?'no weigh-ins':trendR1(M.wCur.avg)+' '+M.unit+', n='+M.wCur.n),
+  'Prior 7 days: '+(M.wPrev.avg==null?'no weigh-ins':trendR1(M.wPrev.avg)+' '+M.unit+', n='+M.wPrev.n),
+  M.wNote,
+  'Snack slot share of calories on file: '+(M.snackPct==null?'no calories on file':Math.round(M.snackPct*100)+'%'),
+  'Evening: '+(M.eve.claim?Math.round((M.eve.pct||0)*100)+'% of calories on file, from meal times you entered':M.eve.why)];
+ const marks=src.filter(d=>M.cycle[d.date]).map(d=>trendNice(d.date));
+ if(opts.cycle&&marks.length)lines.push('Context tags: '+marks.join(', '));
+ else lines.push('Context tags are not included.');
+ if(opts.priv&&opts.notes&&opts.notes.length)opts.notes.forEach(n=>lines.push('Private note '+trendNice(n.date)+': '+String(n.note).replace(/\s+/g,' ')));
+ else lines.push('Private notes are not included.');
  return lines.join('\n')}
-function trendSummary(){return trendSummaryText(trendBuild(S,today(),7))}
+function trendNotesIn(state,dates){const days=state&&state.holiday50&&state.holiday50.days||{},out=[];
+ dates.forEach(d=>{const note=days[d]&&days[d].privateNote;if(note)out.push({date:d,note:String(note)})});return out}
+function trendSummary(opts){const M=trendBuild(S,today(),7);opts=opts||{};if(opts.priv)opts.notes=trendNotesIn(S,M.cur.map(d=>d.date));return trendSummaryText(M,opts)}
 
-function trendBarColor(d,target){
- if(!d||d.status==='unlogged')return '#3A3A3C';
- if(Math.round(d.kcal)>target+400)return '#ff453a';
- if(d.status==='partial')return '#8E8E93';
- if(d.kcal>target)return '#ff9f0a';
- return '#30d158'}
-function trendWeekColor(avg,target){if(avg==null)return '#3A3A3C';if(Math.round(avg)>target+400)return '#ff453a';if(avg>target)return '#ff9f0a';return '#30d158'}
-
+function trendBarColor(d){if(d.status==='complete')return '#30d158';if(d.status==='partial')return '#ff9f0a';if(d.status==='unknown'&&d.n)return '#8E8E93';return 'transparent'}
 function trendChart(M){
  const weekly=M.win===28;
- const cols=weekly?M.weeks.map(w=>({kcal:w.avgKcal||0,label:trendMD(w.start),sub:w.avgKcal==null?'0':trendN(w.avgKcal),p:null,color:trendWeekColor(w.avgKcal,M.kcalT),title:trendMD(w.start)+' to '+trendMD(w.end)+(w.avgKcal==null?', no logged days':', '+trendN(w.avgKcal)+' kcal average')})):
-  M.cur.map(d=>({kcal:d.status==='unlogged'?0:d.kcal,label:M.win===7?trendDate(d.date).toLocaleDateString('en-US',{weekday:'short'}):String(trendDate(d.date).getDate()),sub:d.status==='unlogged'?'0':trendN(d.kcal),p:d.status==='unlogged'?null:Math.round(d.p),color:trendBarColor(d,M.kcalT),title:trendNice(d.date)+', '+(d.status==='unlogged'?'unlogged':trendN(d.kcal)+' kcal, P'+Math.round(d.p)+', '+d.status)}));
- const max=Math.max(M.kcalT*1.08,...cols.map(c=>c.kcal),1)*1.08,line=M.kcalT/max*100;
- const bars=cols.map(c=>`<div class="trcol" title="${trendEsc(c.title)}"><div class="trtrack"><i style="height:${Math.max(0,Math.min(100,c.kcal/max*100))}%;background:${c.color}"></i></div></div>`).join('');
- const labs=cols.map(c=>`<span><b>${M.win===14?'':trendEsc(c.sub)}</b>${c.p!=null&&M.win===7?'<small>P'+c.p+'</small>':''}${trendEsc(c.label)}</span>`).join('');
- const cap=weekly?'Weekly averages of logged days. The line is your '+trendN(M.kcalT)+' target.':'Daily calories. The line is your '+trendN(M.kcalT)+' target.';
- return `<div class="trbox" role="img" aria-label="${trendEsc(cap+' '+cols.map(c=>c.title).join(', '))}"><div class="trplot"><em class="trline" style="bottom:${line.toFixed(2)}%"></em>${bars}</div><div class="trlabs">${labs}</div><p class="trkey"><i style="background:#30d158"></i>Under <i style="background:#ff9f0a"></i>Over <i style="background:#ff453a"></i>Way over <i style="background:#8E8E93"></i>Partial <s></s>Target ${trendN(M.kcalT)}</p><p class="muted trcap">${trendEsc(cap)}</p></div>`}
+ const cols=weekly?M.weeks.map(w=>({kcal:w.avgKcal||0,label:trendMD(w.start),sub:w.avgKcal==null?'n=0':trendN(w.avgKcal),color:w.avgKcal==null?'#3A3A3C':'#30d158',title:trendMD(w.start)+' to '+trendMD(w.end)+', complete n='+w.n+(w.avgKcal==null?', no complete days':', '+trendN(w.avgKcal)+' kcal avg')})):
+  M.cur.map(d=>({kcal:d.status==='none'||!d.n?0:d.kcal,label:M.win===7?trendDate(d.date).toLocaleDateString('en-US',{weekday:'short'}):String(trendDate(d.date).getDate()),sub:d.status==='none'?'Not logged':!d.n?'Unknown':trendN(d.kcal),color:trendBarColor(d),title:trendNice(d.date)+', '+d.status+(d.n?', '+trendN(d.kcal)+' kcal on file':', no entries')}));
+ const max=Math.max(M.kcalT||0,...cols.map(c=>c.kcal),1)*1.08,line=M.kcalT?M.kcalT/max*100:null;
+ const bars=cols.map(c=>`<div class="trcol" title="${trendEsc(c.title)}"><div class="trtrack"><i style="height:${Math.max(c.kcal?2:0,Math.min(100,c.kcal/max*100))}%;background:${c.color}"></i></div></div>`).join('');
+ const labs=cols.map(c=>`<span><b>${trendEsc(c.sub)}</b>${trendEsc(c.label)}</span>`).join('');
+ const cap='Bar height is calories on file. Only confirmed complete days are averaged. Unknown is not zero.'+(M.kcalT==null?'':' The line is the saved calorie goal.');
+ const lineEl=line==null?'':`<em class="trline" style="bottom:${line.toFixed(2)}%"></em>`;
+ return `<div class="trbox" role="img" aria-label="${trendEsc(cap+' '+cols.map(c=>c.title).join(', '))}"><div class="trplot">${lineEl}${bars}</div><div class="trlabs">${labs}</div><p class="trkey"><i style="background:#30d158"></i>Complete <i style="background:#ff9f0a"></i>Partial <i style="background:#8E8E93"></i>Unknown, on file${M.kcalT==null?'':' <s></s>Saved goal '+trendN(M.kcalT)}</p><p class="muted trcap">${trendEsc(cap)}</p></div>`}
 
-function trendDays(M){if(M.win!==14)return '';
- return `<div class="trdays">${M.cur.map(d=>{const label=d.status==='logged'?'Logged':d.status==='partial'?'Partial':'Unlogged';
-  const mid=d.status==='unlogged'?'No entries':trendN(d.kcal)+' kcal · P'+Math.round(d.p)+(d.meals?` · ${d.meals} meal${d.meals===1?'':'s'}`:'');
-  return `<div class="trli ${d.status}"><span>${trendEsc(trendShort(d.date))}</span><span>${mid}</span><em>${label}</em></div>`}).join('')}</div>`}
-
+function trendDayRows(M){
+ return `<div class="trdays">${M.cur.map(d=>{const mid=d.status==='none'?(d.n?'Marked not logged. Entries stay on file.':'Marked not logged'):d.n?trendN(d.kcal)+' kcal on file, P'+Math.round(d.p):'No entries';
+  return `<div class="trli ${d.status}"><span>${trendEsc(trendShort(d.date))}</span><span>${mid}</span><label class="trpick"><span class="sr">Status</span><select aria-label="Logging status ${trendEsc(trendNice(d.date))}" onchange="trendSetStatus('${d.date}',this.value)">${trendStatusOpts(d.status)}</select></label></div>`}).join('')}</div>`}
+function trendStatusOpts(cur){return [['unknown','Unknown'],['complete','Complete'],['partial','Partial'],['none','Not logged']].map(([v,l])=>`<option value="${v}"${cur===v?' selected':''}>${l}</option>`).join('')}
 function trendWeeks(M){if(M.win!==28)return '';
- return `<div class="trweeks">${M.weeks.map(w=>{const kcal=w.avgKcal==null?'No logged days':trendAvgPhrase(w.avgKcal,w.logged);
-  const p=w.avgP==null?'':` · P${Math.round(w.avgP)}`,wt=w.weight==null?'':` · ${trendR1(w.weight)} ${trendEsc(M.unit)}`;
-  return `<div class="trwk"><b>${trendEsc(trendMD(w.start))} to ${trendEsc(trendMD(w.end))}</b><span>${trendEsc(kcal)}${p} · ${w.logged}/7 logged${wt}</span></div>`}).join('')}</div>`}
+ return `<div class="trweeks">${M.weeks.map(w=>{const kcal=w.avgKcal==null?'No confirmed complete days':trendN(w.avgKcal)+' kcal avg, n='+w.n;
+  const p=w.avgP==null?'':`, P${Math.round(w.avgP)} avg`;
+  const wt=w.weight.avg==null?'No weigh-ins':trendR1(w.weight.avg)+' '+M.unit+', n='+w.weight.n+(w.weight.enough?'':'. Not enough weigh-ins to call a trend');
+  const part=w.partial.n?'Partial separate: n='+w.partial.n+', '+trendN(w.partial.kcal)+' kcal on file. ':'';
+  return `<div class="trwk"><b>${trendEsc(trendMD(w.start))} to ${trendEsc(trendMD(w.end))}</b><span>${trendEsc(trendCovLine(w.coverage))}</span><span>${trendEsc(kcal)}${p}</span><span>${part}${trendEsc(wt)}</span></div>`}).join('')}</div>`}
 
-function trendCycleRow(M){const dates=M.win===28?trendDates(M.end,28):M.cur.map(d=>d.date);
- return `<div class="cycar" role="group" aria-label="Cycle days">${dates.map(d=>{const on=!!M.cycle[d];
-  return `<button type="button" class="cyc${on?' on':''}" data-date="${d}" aria-pressed="${on?'true':'false'}" aria-label="${on?'Cycle day':'Mark as cycle day'} ${trendEsc(trendNice(d))}" onclick="trendCycle('${d}')"><b>${trendEsc(trendWd(d))}</b><small>${trendDate(d).getDate()}</small></button>`}).join('')}</div>`}
-
-function trendCard(){const M=trendBuild(S,today(),trendWin),u=trendEsc(M.unit);
- const calFlags=[M.overAvg?`<p class="trflag">Average is ${trendN(Math.round(M.avgKcal)-M.kcalT)} kcal over the ${trendN(M.kcalT)} target.</p>`:'',
-  ...M.hot.map(d=>`<p class="trflag">${trendEsc(trendNice(d.date))} was ${trendN(Math.round(d.kcal)-M.kcalT)} kcal over target.</p>`)].join('');
- const eveLine=M.evePct==null?'After 7 pm: no entry times':`After 7 pm ${Math.round(M.evePct*100)}%`+(M.eveUntimed?' · some entries have no time':'');
- const snackLine=M.snackPct==null?'No food logged yet':`Snacks ${Math.round(M.snackPct*100)}% · ${eveLine}`;
- const snackFlag=M.snackDays.length?`<p class="trflag">${M.snackDays.length} day${M.snackDays.length===1?'':'s'} with snacks over 25% of calories.</p>`:'';
- const wClass=M.wCur==null||M.wPrev==null?'':trendR1(trendR1(M.wCur)-trendR1(M.wPrev))<0?' down':trendR1(trendR1(M.wCur)-trendR1(M.wPrev))>0?' up':'';
+function trendStatusCard(date){const st=trendStatus(S.logStatus,date),nice=trendNice(date),todayish=date===today();
+ return `<div class="card logstat" id="logstat"><h3>Logging status</h3><p class="muted">${trendEsc(nice)}${todayish?' is still in progress.':''} FitCoach does not mark a day complete from calories or meal count. Unknown is the default until you choose.</p>
+ <div class="trwin" role="group" aria-label="Logging status">${[['unknown','Unknown'],['complete','Complete'],['partial','Partial'],['none','Not logged']].map(([v,l])=>`<button type="button" class="chip${st===v?' on':''}" aria-pressed="${st===v?'true':'false'}" onclick="trendSetStatus('${date}','${v}')">${l}</button>`).join('')}</div></div>`}
+function trendCard(){const M=trendBuild(S,today(),trendWin),c=M.cov;
+ const wClass=M.wCur.enough&&M.wPrev.enough?(trendR1(M.wCur.avg)-trendR1(M.wPrev.avg)<0?' down':trendR1(M.wCur.avg)-trendR1(M.wPrev.avg)>0?' up':''):'';
+ const snack=M.snackPct==null?'No calories on file yet.':`Snack slot is ${Math.round(M.snackPct*100)}% of calories on file. This is a description, not a target.`;
+ const eve=M.eve.claim?`Evening share ${Math.round((M.eve.pct||0)*100)}% of calories on file, using meal times you entered.`:'Evening: '+M.eve.why;
  return `<div class="card trends" id="trends" data-win="${M.win}">
  <div class="trtop"><h3>Trends</h3><button type="button" class="btn sm trcopy" id="trend-copy" onclick="trendCopy()">Copy for Coach</button></div>
  <div class="trwin" role="group" aria-label="Trend window">${[7,14,28].map(n=>`<button type="button" class="chip${M.win===n?' on':''}" data-win="${n}" aria-pressed="${M.win===n?'true':'false'}" onclick="trendSet(${n})">${n} days</button>`).join('')}</div>
- ${M.notTracking?`<div class="tralert" role="status"><b>Not tracking</b><span>${trendEsc(M.reasons.join(' '))}</span></div>`:''}
- <p class="trcomp"><b>${M.logged7} of 7</b> days logged <span>· ${M.logged14} of 14</span></p>
- <p class="muted trule">A logged day is 2 or more meals and at least 1,000 kcal. Averages use those days.</p>
+ <div class="trcov"><div class="lbl">Coverage</div><p class="trcomp"><b>${c.complete} complete</b> · ${c.partial} partial · ${c.none} not logged · ${c.unknown} unknown</p>
+ <p class="muted trule">${M.avgN} of ${c.total} days are confirmed complete and eligible for averages. Unknown is the default. Missing days are not counted as zero.</p></div>
  <div class="trpair">
-  <div><div class="lbl">Calories</div><div class="travg"><b>${M.avgKcal==null?'None':trendN(M.avgKcal)}</b><span>${M.avgKcal==null?'no logged days':'avg over '+M.loggedN+' day'+(M.loggedN===1?'':'s')}</span></div><p class="trvs">${trendEsc(trendVs(M.avgKcal,M.priorKcal,M.win))}</p></div>
-  <div><div class="lbl">Weight · 7-day</div><div class="travg"><b class="w${wClass}">${trendEsc(M.wHead)}</b></div><p class="trvs${wClass}">${trendEsc(M.wCard)}</p></div>
+  <div><div class="lbl">Calories, complete only</div><div class="travg"><b>${M.avgKcal==null?'None':trendN(M.avgKcal)}</b><span>${M.avgKcal==null?'no confirmed complete days':'avg, n='+M.avgN}</span></div><p class="trvs">${trendEsc(trendGoalLine(M.kcalT))}</p></div>
+  <div><div class="lbl">Weight, 7-day window</div><div class="travg"><b class="w${wClass}">${trendEsc(M.wHead)}</b></div><p class="trvs${wClass}">${trendEsc(M.wNote)}</p></div>
  </div>
- ${calFlags}
- ${M.stall?`<p class="trflag">Weight stall: weekly average stayed within ${M.unit==='kg'?'0.14 kg (0.3 lb)':'0.3 lb'} for 2 weeks, with ${M.logged7} of 7 days logged.</p>`:''}
- <div class="trpro"><div class="lbl">Protein</div><div class="travg"><b>${M.avgP==null?'None':Math.round(M.avgP)+' g'}</b><span>${M.avgP==null?'no logged days':'avg over '+M.loggedN+' day'+(M.loggedN===1?'':'s')}</span></div><p class="trvs">${M.pHits} of ${M.win} days at 130 g+ · target ${Math.round(M.pT)} g${M.avgP!=null?' · '+trendEsc(trendVs(M.avgP,M.priorP,M.win,' g')):''}</p>${M.pLow?'<p class="trflag">Average protein is under 125 g.</p>':''}</div>
- <div class="trsn"><div class="lbl">Evening and snacks</div><p class="trsnack">${snackLine}</p>${snackFlag}</div>
+ <div class="trpro"><div class="lbl">Protein, complete only</div><div class="travg"><b>${M.avgP==null?'None':Math.round(M.avgP)+' g'}</b><span>${M.avgP==null?'no confirmed complete days':'avg, n='+M.pN}</span></div><p class="trvs">${trendEsc(trendGoalLine(M.pT,' g'))}</p></div>
+ <p class="trsnack">Partial, separate: ${M.partial.n?trendEsc('n='+M.partial.n+', '+trendN(M.partial.kcal)+' kcal and '+Math.round(M.partial.p)+' g protein on file. Not in the average.'):'no partial days.'}</p>
+ <div class="trsn"><div class="lbl">Snacks and meal times</div><p class="trsnack">${snack}</p><p class="trsnack">${trendEsc(eve)}</p></div>
  ${trendChart(M)}
- ${M.win===28?trendWeeks(M):trendDays(M)}
- <h4>Cycle days</h4>
+ ${M.win===28?trendWeeks(M):trendDayRows(M)}
+ <h4>Context tags</h4>
+ <p class="muted trnote">Optional. A tag does not explain a weight change.</p>
  ${trendCycleRow(M)}
- ${M.stallNote?`<p class="muted trnote">${trendEsc(M.stallNote)}</p>`:''}
  </div>`}
+function trendCycleRow(M){const dates=M.cur.map(d=>d.date);
+ return `<div class="cycar" role="group" aria-label="Context tags">${dates.map(d=>{const on=!!M.cycle[d];
+  return `<button type="button" class="cyc${on?' on':''}" data-date="${d}" aria-pressed="${on?'true':'false'}" aria-label="${on?'Context tag on':'Add context tag'} ${trendEsc(trendNice(d))}" onclick="trendCycle('${d}')"><b>${trendEsc(trendWd(d))}</b><small>${trendDate(d).getDate()}</small></button>`}).join('')}</div>`}
 
 function trendSet(n){trendWin=trendWinN(n);const y=window.scrollY;renderFood();window.scrollTo(0,y)}
 function trendCycle(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return;S.cycleDays||={};if(S.cycleDays[d])delete S.cycleDays[d];else S.cycleDays[d]=1;save();const y=window.scrollY;renderFood();window.scrollTo(0,y)}
-function trendCopy(){const text=trendSummary();window.__coachText=text;const ok=()=>toast('Copied for your coach.');
+function trendSetStatus(date,status){if(!trendApplyStatus(S,date,status))return;save();const y=window.scrollY;
+ if(location.hash==='#holiday'&&typeof renderHoliday==='function')renderHoliday();else renderFood();window.scrollTo(0,y)}
+let trendCopyOpts={cycle:false,priv:false};
+function trendCopy(opts){if(opts)trendCopyOpts=Object.assign({cycle:false,priv:false},opts);const text=trendSummary(trendCopyOpts);window.__coachText=text;
+ modal(`<h3>Copy for Coach</h3><p class="muted">Check the preview. Context tags and private notes stay off unless you include them.</p>
+ <label class="mchk"><input type="checkbox" id="trend-inc-cycle" ${trendCopyOpts.cycle?'checked':''} onchange="trendCopy({cycle:this.checked,priv:trendCopyOpts.priv})"> Include context tags</label>
+ <label class="mchk"><input type="checkbox" id="trend-inc-priv" ${trendCopyOpts.priv?'checked':''} onchange="trendCopy({cycle:trendCopyOpts.cycle,priv:this.checked})"> Include private notes</label>
+ <pre id="trend-preview" class="copypre">${trendEsc(text)}</pre>
+ <button type="button" class="btn" id="trend-copy-go" onclick="trendCopyNow()">Copy this text</button>`)}
+function trendCopyNow(){const text=window.__coachText||'';const ok=()=>toast('Copied for your coach.');
  const fail=()=>{const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();
   try{document.execCommand('copy');ok()}catch(e){toast('Could not copy. Try again.')}ta.remove()};
  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(ok).catch(fail);else fail()}

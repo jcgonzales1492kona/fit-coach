@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>FitCoach trends preview</title>
-<link rel="stylesheet" href="../style.css?v=39">
+<link rel="stylesheet" href="../style.css?v=40">
 <style>
  body.trend-shot{padding-bottom:12px}
  body.trend-shot header,body.trend-shot nav,body.trend-shot #toast,body.trend-shot #iosb{display:none !important}
@@ -55,7 +55,7 @@
   function next(){
     if(i>=files.length){seed();return}
     var s=document.createElement('script');
-    s.src='../'+files[i]+'?v=39';
+    s.src='../'+files[i]+'?v=40';
     s.onload=function(){i++;next()};
     s.onerror=function(){document.body.insertAdjacentHTML('beforeend','<p style="color:#ffb340;padding:16px">Could not load '+files[i]+'</p>')};
     document.body.appendChild(s);
@@ -74,50 +74,32 @@
   }
   function ago(iso,end){return Math.round((trendDate(end)-trendDate(iso))/86400000)}
   function seed(){
-    var end=today(),log={},d7=trendDates(end,7),prior=trendDates(trendShift(end,-7),7),all=trendDates(end,56);
-    prior.forEach(function(d){log[d]=splitDay(d,1650,140)});
-    log[d7[0]]=splitDay(d7[0],1650,140);
-    log[d7[3]]=[
-      ent(d7[3],'Eggs and toast','b',450,30,8,0),
-      ent(d7[3],'Burger and fries','l',600,35,12,40),
-      ent(d7[3],'Pasta','d',550,20,18,20),
-      ent(d7[3],'Ice cream','s',800,5,21,15)
-    ];
-    log[d7[4]]=splitDay(d7[4],1750,110);
-    log[d7[5]]=[ent(d7[5],'Cookies','s',350,15,21,5)];
-    log[d7[6]]=splitDay(d7[6],1800,130);
-    for(var n=14;n<56;n++){
-      var d=trendShift(end,-n);
-      if(n%11===0)continue;
-      if(n%17===0){log[d]=[ent(d,'Yogurt','b',420,30,8,0)];continue}
-      log[d]=splitDay(d,1680+(n%5)*40,130+(n%4)*8);
-    }
-    var last7=[184.8,184.6,184.7,184.9,184.5,184.6,184.4];
-    var weights=all.map(function(d){
-      var a=ago(d,end),w;
-      if(a<=6)w=last7[6-a];
-      else if(a<=13)w=185.4;
-      else w=trendR1(185.4+(a-13)*0.09);
-      return {d:d,w:w};
-    });
+    var end=today(),log={},d7=trendDates(end,7),prior=trendDates(trendShift(end,-7),7),status={};
+    log[d7[0]]=splitDay(d7[0],2400,100);
+    status[d7[1]]='none';
+    log[d7[2]]=[ent(d7[2],'Sample oats','b',900,40,8,0)];
+    status[d7[2]]='partial';
+    log[d7[3]]=splitDay(d7[3],1600,140);
+    status[d7[3]]='complete';
+    log[d7[5]]=splitDay(d7[5],1800,150);
+    status[d7[5]]='complete';
+    log[d7[6]]=[ent(d7[6],'Sample bar','s',400,20,21,0)];
+    var weights=prior.concat(d7).map(function(d,i){return {d:d,w:i<7?185.4:184.6}});
     S.settings.kcal=1720;
     S.settings.p=145;
     S.log=log;
     S.weights=weights;
-    S.cycleDays=S.cycleDays||{};
+    S.logStatus=status;
+    S.cycleDays={};
     S.cycleDays[d7[3]]=1;
+    S.holiday50={v:1,days:{},weeks:{},flex:[],steps:{}};
+    S.holiday50.days[d7[3]]={privateNote:'Sample private line'};
     var keep=S.custom&&S.custom.slice();
     renderFood();
     if(keep&&S.custom.length<keep.length)throw new Error('seed dropped custom foods');
     var M=trendBuild(S,end,7);
-    if(Math.round(M.avgKcal)!==1900||M.logged7!==4||Math.round(M.avgP)!==118||!M.notTracking||!M.overAvg||!M.pLow||M.hot.length!==1)throw new Error('sample did not match the preview checks');
-    var orig=trendCopy;
-    trendCopy=function(){
-      orig();
-      var box=document.getElementById('copyshot');
-      box.hidden=false;
-      box.querySelector('pre').textContent=window.__coachText;
-    };
+    if(Math.round(M.avgKcal)!==1700||M.avgN!==2||M.cov.complete!==2||M.cov.partial!==1||M.cov.none!==1||M.cov.unknown!==3)throw new Error('sample did not match the preview checks');
+    if(M.cur.some(function(d){return d.kcal>=2400&&d.status!=='unknown'}))throw new Error('unknown day was treated as complete');
     document.documentElement.dataset.ready='1';
   }
   next();

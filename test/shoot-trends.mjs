@@ -25,10 +25,11 @@ await page.goto(`http://127.0.0.1:${port}/test/trends-harness.html`,{waitUntil:'
 await page.waitForFunction(()=>document.documentElement.dataset.ready==='1',{timeout:15000});
 const text=await page.locator('#trends').innerText();
 const expect=[
- '1,900','avg over 4 days','4 of 7','11 of 14','Not tracking','under 125 g','180 kcal over','1,720',
- '184.6','down 0.8','Snacks 20%','After 7 pm 14%','2 days with snacks over 25%'
+ 'COVERAGE','2 complete','1 partial','1 not logged','3 unknown','1,700','n=2','1,720','saved goal','not marked medically approved',
+ 'not counted as zero','184.6','Down 0.8','Partial, separate','900','Log time is not used'
 ];
 for(const s of expect){if(!text.includes(s))fail('7-day view missing: '+s)}
+if(/Not tracking|Way over|under 125|cut calories/i.test(text))fail('old off-track copy is still visible');
 if(/[\u2013\u2014]/.test(text))fail('em dash or en dash in trends text');
 const h=await page.locator('#trends').evaluate(el=>el.getBoundingClientRect().height);
 console.log('trends height',Math.round(h));
@@ -46,7 +47,7 @@ if(rows14!==14)fail('14-day daily rows '+rows14);
 await page.locator('.trwin [data-win="28"]').click();
 await page.waitForSelector('#trends[data-win="28"]');
 const t28=await page.locator('#trends').innerText();
-if(!t28.includes('Weekly averages'))fail('28-day view missing weekly averages');
+if(!t28.includes('COVERAGE')||!t28.includes('complete'))fail('28-day view missing coverage');
 const weeks=await page.locator('.trwk').count();
 if(weeks!==4)fail('expected 4 week rows, got '+weeks);
 if(/[\u2013\u2014]/.test(t28))fail('em dash in 28-day view');
@@ -56,14 +57,21 @@ await page.screenshot({path:path.join(out,'trends_28_day.png')});
 await page.locator('.trwin [data-win="7"]').click();
 await page.waitForSelector('#trends[data-win="7"]');
 await page.locator('#trend-copy').click();
-await page.waitForSelector('#copyshot:not([hidden])');
-const copied=await page.evaluate(()=>window.__coachText);
-const clip=await page.evaluate(async()=>{try{return await navigator.clipboard.readText()}catch(e){return ''}});
-for(const s of ['FitCoach weekly summary','Days logged: 4/7','Avg calories: 1,900 over 4 days (target 1,720)','Avg protein: 118 g over 4 days (target 145 g)','Days protein hit (130 g+): 2 of 7','2,400 kcal','Snack share: 20%','After 7 pm: 14%','184.6 lb 7-day avg, down 0.8 lb vs prior week','Unlogged:','Partial:']){
+await page.waitForSelector('#trend-preview');
+let copied=await page.locator('#trend-preview').innerText();
+if(copied.includes('Sample private line'))fail('private note was included before the box was checked');
+if(!copied.includes('Private notes are not included.'))fail('preview did not say private notes are off');
+await page.locator('#trend-inc-priv').check();
+await page.waitForSelector('#trend-preview');
+copied=await page.locator('#trend-preview').innerText();
+for(const s of ['FitCoach summary','Coverage:','confirmed complete','1,700','n=2','not marked medically approved','Partial days, separate','not counted as zero','Sample private line']){
   if(!copied.includes(s))fail('summary missing: '+s);
 }
 if(/[\u2013\u2014]/.test(copied))fail('dash in summary');
-if(clip&&clip!==copied)fail('clipboard text differs from summary');
+await page.locator('#trend-copy-go').click();
+const clip=await page.evaluate(async()=>{try{return await navigator.clipboard.readText()}catch(e){return ''}});
+const live=await page.evaluate(()=>window.__coachText||'');
+if(clip&&live&&clip!==live)fail('clipboard text differs from summary');
 await page.screenshot({path:path.join(out,'trends_copied_summary.png')});
 console.log('summary\n'+copied);
 
@@ -103,7 +111,8 @@ const kept=await app.evaluate(()=>({
 if(kept.marker!=='preserve-me'||kept.kcal!==1800||kept.p!==150||kept.tdee!==2200)fail('settings or marker were rewritten '+JSON.stringify(kept));
 if(kept.egg!=='Egg, whole'||kept.w!==199.5||!kept.custom||!kept.fav||kept.sess!==1||kept.cycle!==1)fail('existing data missing '+JSON.stringify(kept));
 if(!kept.target.includes('1,800'))fail('trends did not read the saved calorie target');
-if(!kept.target.includes('0 of 7')||!kept.target.includes('Not tracking'))fail('empty recent week should show not tracking');
+if(!kept.target.includes('0 of 7')||!kept.target.includes('Unknown'))fail('empty recent week should stay unknown');
+if(/Not tracking/.test(kept.target))fail('empty week still shows the old alert');
 await app.locator('.cycar button').first().click();
 const still=await app.evaluate(()=>({egg:S.log['2020-01-01'][0].name,w:S.weights.find(x=>x.d==='2020-01-01').w,cycle:S.cycleDays['2020-05-01'],custom:S.custom.some(x=>x.id==='keepme'),marker:S.marker}));
 if(still.egg!=='Egg, whole'||still.w!==199.5||still.cycle!==1||!still.custom||still.marker!=='preserve-me')fail('toggle removed saved data '+JSON.stringify(still));
