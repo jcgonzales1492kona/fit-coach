@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>FitCoach holiday preview</title>
-<link rel="stylesheet" href="../style.css?v=41">
+<link rel="stylesheet" href="../style.css?v=42">
 <style>
  #sample{margin:0;padding:8px 14px;background:#2c2c2e;color:#f2f2f7;font:600 13px/1.4 -apple-system,sans-serif}
 </style>
@@ -26,7 +26,7 @@
 </script>
 </head>
 <body>
-<p id="sample">Sample data. Not a real log.</p>
+<p id="sample">EXAMPLE DATA. Not a real log.</p>
 <header>FitCoach</header>
 <main><section id="food" class="tab"></section><section id="workout" class="tab" hidden></section><section id="cond" class="tab" hidden></section><section id="holiday" class="tab" hidden></section><section id="progress" class="tab" hidden></section><section id="settings" class="tab" hidden></section></main>
 <nav><button data-t="food">🍽️<span>Food</span></button><button data-t="workout">🏋️<span>Workout</span></button><button data-t="cond">🚣<span>Conditioning</span></button><button data-t="holiday">🗓️<span>Holiday</span></button><button data-t="progress">📈<span>Progress</span></button><button data-t="settings">⚙️<span>Settings</span></button></nav>
@@ -39,7 +39,7 @@
   function next(){
     if(i>=files.length){seed();return}
     var s=document.createElement('script');
-    s.src='../'+files[i]+'?v=41';
+    s.src='../'+files[i]+'?v=42';
     s.onload=function(){i++;next()};
     s.onerror=function(){document.body.insertAdjacentHTML('beforeend','<p style="color:#ffb340;padding:16px">Could not load '+files[i]+'</p>')};
     document.body.appendChild(s);
@@ -60,14 +60,14 @@
     S.holiday50={v:1,enrolled:'2026-11-06',moveLabel:'Easy walk',days:{
       '2026-11-05':{note:'Optional note from before the start'},
       '2026-11-06':{note:'Logged lunch before the meeting',privateNote:'Sample private line',checks:{move:1,reflect:1},confirmed:'self'},
-      '2026-11-08':{train:'medical'}
+      '2026-11-08':{train:'rest'}
     },weeks:{1:{habits:'Logged two meals',obstacle:'A long meeting',adjust:'Pack lunch tonight'}},flex:[{id:'f1',date:'2026-11-07',label:'Sample dinner out'}],steps:{}};
     if(JSON.stringify(S.log)==='{}')throw new Error('seed lost the food log');
     h50Sel='2026-11-06';
     show('holiday');
     var text=document.getElementById('holiday').innerText;
     if(!text.includes('Day 2 of 50'))throw new Error('day count');
-    if(!text.includes('Planned in your program: Pull'))throw new Error('plan label');
+    if(!text.includes('Program: Pull'))throw new Error('plan label');
     if(!text.includes('Sample push'))throw new Error('session on file');
     if(!text.includes('not a completed workout'))throw new Error('plan copy');
     if(!text.includes('Challenge tracker'))throw new Error('tracker missing');

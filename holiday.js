@@ -181,11 +181,15 @@ function h50Paint(){const y=window.scrollY;renderHoliday();window.scrollTo(0,y)}
 function h50Open(iso){if(!h50Index(iso))return;h50Sel=iso;h50Paint()}
 function h50ShiftDay(n){const d=h50Shift(h50Selected(),n);if(h50Index(d))h50Open(d)}
 function h50Dot(on,part,letter){return `<i class="${on?'on':part?'part':''}">${letter}</i>`}
-function h50Grid(){const label=h50Read(S).moveLabel||'';
- return `<div class="card" id="h50grid"><h3>Challenge tracker</h3><p class="muted">Built-in tracker for all 50 days. M is optional movement${label?' ('+h50Esc(label)+')':''}. W is a workout you checked. F is a food day you confirmed complete. R is a reflection you checked. An empty box is not a miss.</p><p class="muted">These daily checks are separate from your weekly program. A planned workout does not check W. A finished workout on file does not check it either.</p>${H50_WEEKS.map(w=>{const n=h50WeekChecked(S,w);const cells=h50Range(w.start,w.end).map(d=>{const m=h50Marks(S,d),rest=m.train==='rest'||m.train==='clinic'||m.train==='medical';
-  const tag=m.train==='medical'?'Medical':m.train==='clinic'?'Clinic':m.train==='rest'?'Rest':'';
-  return `<button type="button" class="h50cell${d===h50Selected()?' on':''}${m.before?' before':''}${rest?' rest':''}" data-day="${d}" aria-pressed="${d===h50Selected()?'true':'false'}" aria-label="${h50Esc(h50Nice(d))}${m.before?'. Before you started.':''}${m.move?' Movement checked.':' Movement open.'}${m.workout?' Workout checked.':' Workout open.'}" onclick="h50Open('${d}')"><b>${h50Date(d).getDate()}</b><small>${h50Date(d).toLocaleDateString('en-US',{weekday:'narrow'})}</small><span class="h50dots" aria-hidden="true">${h50Dot(m.move,0,'M')}${h50Dot(m.workout,0,'W')}${h50Dot(m.food==='complete',m.food==='partial','F')}${h50Dot(m.reflect,0,'R')}</span>${tag?`<em>${tag}</em>`:''}</button>`}).join('');
-  return `<div class="h50wk"><div class="h50wkhead"><b>Week ${w.id}</b><span>Workouts checked: ${n}. Not a daily requirement.</span></div><div class="h50cells">${cells}</div></div>`}).join('')}</div>`}
+function h50MD(iso){return h50Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function h50Full(iso){return h50Date(iso).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+function h50Month(iso){return h50Date(iso).toLocaleDateString('en-US',{month:'long',year:'numeric'})}
+function h50Grid(){let prev='';
+ return `<div class="card" id="h50grid"><p class="h50legend"><b>M</b> movement <b>W</b> workout <b>F</b> food complete <b>R</b> reflection</p>${H50_WEEKS.map(w=>{const month=h50Month(w.start),banner=month===prev?'':`<h4 class="h50month">${month}</h4>`,n=h50WeekChecked(S,w);prev=month;
+  const cells=h50Range(w.start,w.end).map(d=>{const m=h50Marks(S,d),rest=m.train==='rest'||m.train==='clinic'||m.train==='medical';
+   const tag=m.train==='medical'?'Medical':m.train==='clinic'?'Clinic':m.train==='rest'?'Rest':'';
+   return `<button type="button" class="h50cell${d===h50Selected()?' on':''}${m.before?' before':''}${rest?' rest':''}" data-day="${d}" aria-pressed="${d===h50Selected()?'true':'false'}" aria-label="${h50Esc(h50Full(d))}${m.before?'. Before you started.':''}${m.move?' Movement checked.':' Movement open.'}${m.workout?' Workout checked.':' Workout open.'}" onclick="h50Open('${d}')"><b>${h50Date(d).getDate()}</b><small>${h50Date(d).toLocaleDateString('en-US',{weekday:'narrow'})}</small><span class="h50dots" aria-hidden="true">${h50Dot(m.move,0,'M')}${h50Dot(m.workout,0,'W')}${h50Dot(m.food==='complete',m.food==='partial','F')}${h50Dot(m.reflect,0,'R')}</span>${tag?`<em>${tag}</em>`:''}</button>`}).join('');
+  return banner+`<div class="h50wk"><div class="h50wkhead"><b>Week ${w.id}, ${h50MD(w.start)} to ${h50MD(w.end)}</b><span>Workouts checked: ${n}</span></div><div class="h50cells">${cells}</div></div>`}).join('')}</div>`}
 function h50CheckButtons(iso){const m=h50Marks(S,iso);
  const btn=(key,on,label)=>`<button type="button" class="chip${on?' on':''}" data-check="${key}" aria-pressed="${on?'true':'false'}" onclick="h50Toggle('${iso}','${key}')">${label}</button>`;
  return `<div class="trwin" id="h50checks" role="group" aria-label="Self-confirmed checks">${btn('move',m.move,'Movement')}${btn('workout',m.workout,'Workout done')}${btn('reflect',m.reflect,'Reflection')}</div><p class="muted">Self-confirmed. Uncheck any box to correct it. These boxes do not add food, weight, or workout records.</p>`}
@@ -199,51 +203,44 @@ function renderHoliday(){
  const wA=win?h50Weight(S.weights,win.start,win.end):null,prev=win?H50_WINS.find(w=>w.id===win.id-1):null;
  const wB=prev?h50Weight(S.weights,prev.start,prev.end):null,unit=S.settings&&S.settings.unit==='kg'?'kg':'lb';
  const g=S.settings||{};
+ const foodWord={unknown:'Unknown',complete:'Complete',partial:'Partial',none:'Not logged'}[modelFood.status]||'Unknown';
  $('#holiday').innerHTML=`
- <div class="ovh"><small class="muted">Nov 5 to Dec 24, 2026</small><div class="ovt"><h2>Holiday 50</h2><span class="h50count">Day ${n} of 50</span></div>
- <p class="muted">Day ${n} of 50, ${h50Esc(h50Nice(iso))}. This count is the date, not a score. A quiet day does not reset anything.</p></div>
+ <div class="ovh" id="h50top"><h2>Holiday 50</h2>
+ <p>Challenge tracker, November 5 to December 24, 2026</p>
+ <p><b>Day ${n} of 50</b>, ${h50Esc(h50Full(iso))}</p>
+ <p class="muted">Tap a day to check it.</p>
+ ${h.enrolled?'':`<button type="button" class="btn" onclick="h50Start()">Start from today</button>`}</div>
  ${h50Grid()}
- <details class="card h50def"><summary>How weeks are counted</summary>
- <p>Check-in weeks follow the calendar. Week 1 is Thu Nov 5 to Sun Nov 8. Weeks 2 to 6 are Monday to Sunday. Week 7 is Mon Dec 14 to Thu Dec 24, so it is longer. Saturday is the check-in day, and you can fill it later.</p>
- <p>Weight uses other windows: seven blocks of 7 days from Thu Nov 5 through Wed Dec 23. Dec 24 stays on its own. A change is shown only when both windows have at least 3 weigh-ins. Days without a weigh-in are left out.</p>
- <p>The paper sheet mixes week labels. This screen uses the dates above.</p></details>
- ${h.enrolled?`<p class="muted">Started ${h50Esc(h.enrolled)}. Days before that are optional and are not marked missed. <button type="button" class="link" onclick="h50ClearStart()">Clear start date</button></p>`
-  :`<div class="card"><p>Nothing is marked missed. If you start today, earlier challenge days stay optional.</p><button type="button" class="btn" onclick="h50Start()">Start from today</button></div>`}
- ${before?'<p class="h50note">Before you started here. Nothing is required for this day, and it is not marked missed. You can still add a note if you want.</p>':''}
- <div class="h50nav"><button type="button" onclick="h50ShiftDay(-1)" aria-label="Previous day">Prev</button><b>${h50Esc(h50Nice(iso))}</b><button type="button" onclick="h50ShiftDay(1)" aria-label="Next day">Next</button></div>
- <div class="trwin" role="group" aria-label="Challenge week">${H50_WEEKS.map(w=>`<button type="button" class="chip${w.id===week.id?' on':''}" aria-pressed="${w.id===week.id?'true':'false'}" onclick="h50Open('${w.start}')">Week ${w.id}</button>`).join('')}</div>
- <div class="h50strip" role="group" aria-label="Days in this week">${h50Range(week.start,week.end).map(d=>`<button type="button" class="h50d${d===iso?' on':''}" aria-pressed="${d===iso?'true':'false'}" onclick="h50Open('${d}')"><b>${h50Date(d).toLocaleDateString('en-US',{weekday:'narrow'})}</b><small>${h50Date(d).getDate()}</small></button>`).join('')}</div>
- <div class="card" id="h50day"><h3>${h50Esc(h50Nice(iso))}</h3>
-  <p class="muted">Logging status: ${modelFood.status}. ${modelFood.n?modelFood.n+' item'+(modelFood.n===1?'':'s')+' on file, '+Math.round(modelFood.kcal)+' kcal, '+Math.round(modelFood.p)+' g protein recorded.':'Nothing on file for this date.'} This is not a deficit check. Saved goals stay ${isFinite(+g.kcal)?Math.round(g.kcal):'unset'} kcal and ${isFinite(+g.p)?Math.round(g.p):'unset'} g protein, and they are not marked medically approved.</p>
-  <div class="trwin" role="group" aria-label="Logging status for this day">${[['unknown','Unknown'],['complete','Complete'],['partial','Partial'],['none','Not logged']].map(([v,l])=>`<button type="button" class="chip${modelFood.status===v?' on':''}" aria-pressed="${modelFood.status===v?'true':'false'}" onclick="trendSetStatus('${iso}','${v}')">${l}</button>`).join('')}</div>
-  <h4 id="h50move">Movement</h4>
-  <p>${plan?'Planned in your program: '+h50Esc(plan.name)+'. A plan is not a completed workout.':'No weekday program is saved, so nothing is shown as planned.'}</p>
-  <p>${on.any?'Completed session on file'+(on.sessions[0]&&on.sessions[0].day?': '+h50Esc(on.sessions[0].day)+'.':'.')+' There is no time minimum.':'No completed session on file. That is unknown, not a missed session.'}</p>
-  <div class="trwin" role="group" aria-label="Training note">${[['unknown','Unknown'],['plan','Planned training'],['rest','Planned rest'],['clinic','Clinic-restricted'],['medical','Medical rest']].map(([v,l])=>`<button type="button" class="chip${train===v?' on':''}" aria-pressed="${train===v?'true':'false'}" onclick="h50TrainSet('${iso}','${v}')">${l}</button>`).join('')}</div>
-  <p class="muted">${train==='medical'?'Medical rest. No steps or workout are required. A blank session stays unknown. Empty checks are not a miss.':train==='clinic'?'Clinic-restricted. This does not mean a walk or a row is allowed. Empty checks are not a miss.':train==='rest'?'Planned rest. This is a choice, not a failed day.':train==='plan'?'Planned training. The plan is not a completed session.':'No training note yet. An unrecorded session stays unknown.'}</p>
+ <div class="card" id="h50day"><h3>${h50Esc(h50Full(iso))}</h3>
+ <div class="h50nav"><button type="button" onclick="h50ShiftDay(-1)" aria-label="Previous day">Prev</button><b>Day ${n} of 50</b><button type="button" onclick="h50ShiftDay(1)" aria-label="Next day">Next</button></div>
+ ${before?'<p class="h50note">Before you started. Nothing is required for this day.</p>':''}
+  <h4>Food</h4>
+  <div class="trwin" role="group" aria-label="Food completeness">${[['unknown','Unknown'],['complete','Complete'],['partial','Partial'],['none','Not logged']].map(([v,l])=>`<button type="button" class="chip${modelFood.status===v?' on':''}" aria-pressed="${modelFood.status===v?'true':'false'}" onclick="trendSetStatus('${iso}','${v}')">${l}</button>`).join('')}</div>
+  <p class="muted">${foodWord}. ${modelFood.n?modelFood.n+' item'+(modelFood.n===1?'':'s')+' on file.':'Nothing logged on this date.'} Unknown until you choose.</p>
+  <h4 id="h50move">Habits</h4>
+  <p>${plan?'Program: '+h50Esc(plan.name)+'. A plan is not a completed workout. ':'No weekday program is saved. '}${on.any?'On file: '+h50Esc((on.sessions[0]&&on.sessions[0].day)||'workout')+'.':'No finished workout on file.'}</p>
   ${h50CheckButtons(iso)}
-  <p class="muted">Food complete is only the logging choice above. Historical days stay Unknown until you choose. Weight is not one of the checks.</p>
-  <p class="muted">${h50DayWeight(S.weights,iso,unit)}. ${h50Esc(h.moveLabel?('Movement, in your words: '+h.moveLabel):'You can name your movement below. There is no default.')}</p>
+  <div class="trwin" role="group" aria-label="Training note">${[['unknown','No note'],['plan','Planned training'],['rest','Planned rest'],['clinic','Clinic-restricted'],['medical','Medical rest']].map(([v,l])=>`<button type="button" class="chip${train===v?' on':''}" aria-pressed="${train===v?'true':'false'}" onclick="h50TrainSet('${iso}','${v}')">${l}</button>`).join('')}</div>
+  <p class="muted">${train==='medical'?'Medical rest. No steps or workout are required. A blank session stays unknown.':train==='clinic'?'Clinic-restricted. This does not mean a walk or a row is allowed.':train==='rest'?'Planned rest. Empty checks are not a miss.':train==='plan'?'Planned training. The plan is not a completed session.':'No training note.'}</p>
+  <details id="h50more"><summary>Weight, reflection, and notes</summary>
+  <p class="muted">${h50DayWeight(S.weights,iso,unit)}.</p>
   <label>Weight for this date, optional<input id="h50wt" inputmode="decimal" placeholder="Leave blank to add nothing"></label>
   <button type="button" class="btn sec" onclick="h50WeightSave()">Save weight in the weight log</button>
   <label>Movement, in your words, optional<input id="h50mlabel" maxlength="80" value="${h50Esc(h.moveLabel||'')}" onchange="h50MoveLabelSet(this.value)" placeholder="Only if you want a name for it"></label>
   <label>One-line reflection, optional<input id="h50note" maxlength="280" value="${h50Esc(day.note||'')}" onchange="h50NoteSet('${iso}',this.value)"></label>
   <label>Context tag, optional<select aria-label="Context tag" onchange="h50ContextSet('${iso}',this.value)">${[['','None'],['cycle','Cycle'],['travel','Travel'],['event','Event'],['other','Other']].map(([v,l])=>`<option value="${v}"${(day.context||'')===v?' selected':''}>${l}</option>`).join('')}</select></label>
-  <p class="muted">A context tag does not explain a weight change.</p>
   <label>Private note, optional<textarea id="h50priv" rows="2" maxlength="500" onchange="h50PrivateSet('${iso}',this.value)">${h50Esc(day.privateNote||'')}</textarea></label>
   <p class="muted">A private note stays on this phone unless you include it in a copy.</p>
   <button type="button" class="btn sec" onclick="show('food')">Open Food</button>
-  <button type="button" class="btn sec" onclick="show('workout')">Open Workout</button></div>
- <div class="card"><h3>Week ${week.id} check-in</h3><p class="muted">${h50Esc(week.start)} to ${h50Esc(week.end)}. Saturday is ${h50Esc(h50Nice(week.saturday))}.</p>
+  <button type="button" class="btn sec" onclick="show('workout')">Open Workout</button></details></div>
+ <div class="card" id="h50checkin"><h3>Saturday check-in</h3><p class="muted">Week ${week.id}, ${h50Esc(h50MD(week.start))} to ${h50Esc(h50MD(week.end))}. Check-in day is ${h50Esc(h50Full(week.saturday))}.</p>
   <p>${h50Esc(week.prompt)}</p>
   <label>Habits<input value="${h50Esc(wk.habits||'')}" onchange="h50WeekSet(${week.id},'habits',this.value)"></label>
   <label>Obstacle<input value="${h50Esc(wk.obstacle||'')}" onchange="h50WeekSet(${week.id},'obstacle',this.value)"></label>
   <label>One realistic adjustment<input value="${h50Esc(wk.adjust||'')}" onchange="h50WeekSet(${week.id},'adjust',this.value)"></label>
   <p class="muted">${h50WeightLine(win,wA,wB,asOf,unit)}</p>
   <button type="button" class="btn" id="h50-copy" onclick="h50Copy()">Copy for Coach</button></div>
- <div class="card"><h3>Weight windows</h3><p class="muted">Same weigh-in log as Food. This list does not add a second weight.</p>
-  ${H50_WINS.map(w=>{const s=h50Weight(S.weights,w.start,w.end);return `<div class="trwk"><b>${h50Esc(w.start)} to ${h50Esc(w.end)}</b><span>${s.n?h50Num(s.avg)+' '+unit+', n='+s.n+(s.enough?'':'. Not enough weigh-ins to call a trend'):'No weigh-ins, n=0'}</span></div>`}).join('')}
-  <div class="trwk"><b>2026-12-24</b><span>${h50DayWeight(S.weights,'2026-12-24',unit)}</span></div></div>
+ ${h50WeighCard(asOf,unit)}
  <div class="card"><h3>Flexible meals</h3><p class="muted">Optional plans for this week. They are not added to the food log, and they do not change saved goals.</p>
   ${flex.length?`<ul class="h50ev">${flex.map(f=>`<li>${h50Esc(h50Nice(f.date))}: ${h50Esc(f.label)} <button type="button" class="link" onclick="h50FlexRemove('${f.id}')">Remove</button></li>`).join('')}</ul>`:'<p class="muted">None planned.</p>'}
   <label>Date<input id="h50fd" type="date" min="${H50_START}" max="${H50_END}" value="${iso}"></label>
@@ -251,17 +248,33 @@ function renderHoliday(){
   <button type="button" class="btn sec" onclick="h50FlexAdd()">Add planned meal</button></div>
  <div class="card"><h3>Movement goal</h3><p class="muted">Step baseline is unknown until you enter one. There is no default of 7,000, and a goal is saved only after a baseline. The usual program stays Thu Push, Fri Pull, Sat Legs, and Sun Conditioning. Nothing here adds extra sessions.</p>
   <label>Baseline, optional<input id="h50base" inputmode="numeric" value="${steps.baseline==null?'':steps.baseline}" onchange="h50BaseSet(this.value)"></label>
-  <label>Goal, optional<input id="h50goal" inputmode="numeric" value="${steps.goal==null?'':steps.goal}" onchange="h50GoalSet(this.value)"></label></div>`;
+  <label>Goal, optional<input id="h50goal" inputmode="numeric" value="${steps.goal==null?'':steps.goal}" onchange="h50GoalSet(this.value)"></label></div>
+ <details class="card h50def" id="h50help"><summary>Help</summary>
+ <p>Week 1 is Thu Nov 5 to Sun Nov 8. Weeks 2 to 6 are Monday to Sunday. Week 7 is Mon Dec 14 to Thu Dec 24. Saturday is the check-in day.</p>
+ <p>M, W, and R are self-confirmed. F is complete only when you choose Complete. Unknown is the default, including older days. An empty box is not a miss. Days before you start are optional.</p>
+ <p>A planned workout does not check W. A finished workout on file does not check it either, and there is no time minimum. Saved goals stay ${isFinite(+g.kcal)?Math.round(g.kcal):'unset'} kcal and ${isFinite(+g.p)?Math.round(g.p):'unset'} g protein. They are not marked medically approved.</p>
+ ${h.enrolled?`<button type="button" class="link" onclick="h50ClearStart()">Clear start date</button>`:''}
+ </details>`;
 }
 function h50WeightLine(win,wA,wB,asOf,unit){
- if(!win)return 'Dec 24 is not inside a 7-day weight window.';
- if(!wA||wA.n===0)return 'No weigh-ins in '+win.start+' to '+win.end+'. Missing days are not counted as zero.';
- const open=asOf<=win.end,avg=h50Num(wA.avg)+' '+unit+', n='+wA.n+' of '+wA.days;
- if(open)return avg+'. This 7-day window is still open, so this is not a finished trend.';
- if(!wA.enough||!wB||!wB.enough)return avg+'. Not enough weigh-ins to call a trend'+(wB?' (prior n='+wB.n+').':'.');
+ if(!win)return 'Dec 24 stands on its own, outside the 7-day weigh-in weeks.';
+ if(!wA||wA.n===0)return 'No weigh-ins from '+h50MD(win.start)+' to '+h50MD(win.end)+'.';
+ const word=wA.n===1?'1 weigh-in':wA.n+' weigh-ins',avg=word+', average '+h50Num(wA.avg)+' '+unit;
+ if(asOf<=win.end)return avg+' from '+h50MD(win.start)+' to '+h50MD(win.end)+'. This week is still open.';
+ if(!wA.enough||!wB||!wB.enough)return avg+' from '+h50MD(win.start)+' to '+h50MD(win.end)+'. Not enough weigh-ins to call a trend.';
  const d=Math.round((wA.avg-wB.avg)*10)/10;
- return avg+'. Prior window '+h50Num(wB.avg)+' '+unit+', n='+wB.n+'. Change '+h50Num(d)+'.'}
-function h50DayWeight(weights,iso,unit){const hit=(weights||[]).find(w=>w&&w.d===iso&&isFinite(+w.w));return hit?h50Num(hit.w)+' '+unit+', n=1':'No weigh-in, n=0'}
+ return avg+' from '+h50MD(win.start)+' to '+h50MD(win.end)+'. Prior week averaged '+h50Num(wB.avg)+' '+unit+' from '+wB.n+' weigh-in'+(wB.n===1?'':'s')+'. Change '+h50Num(d)+'.'}
+function h50DayWeight(weights,iso,unit){const hit=(weights||[]).find(w=>w&&w.d===iso&&isFinite(+w.w));return hit?h50Num(hit.w)+' '+unit+' on this date':'No weigh-in on this date'}
+function h50WeighPhrase(w,s,unit,asOf){const when=h50MD(w.start)+' to '+h50MD(w.end);
+ if(!s||s.n===0)return when+': no weigh-ins'+(w.start<=asOf&&w.end>=asOf?' yet':'');
+ const word=s.n===1?'1 weigh-in':s.n+' weigh-ins';
+ return when+': '+word+', average '+h50Num(s.avg)+' '+unit+(s.enough?'':', not enough to call a trend')}
+function h50WeighCard(asOf,unit){const now=[],later=[];
+ H50_WINS.forEach(w=>{const s=h50Weight(S.weights,w.start,w.end),line=`<div class="trwk"><span>${h50Esc(h50WeighPhrase(w,s,unit,asOf))}</span></div>`;
+  if(w.start>asOf&&s.n===0)later.push(line);else now.push(line)});
+ const dec=h50Weight(S.weights,'2026-12-24','2026-12-24'),decLine=`<div class="trwk"><span>${h50Esc('Dec 24: '+(dec.n?h50Num(dec.avg)+' '+unit:'no weigh-in'))}</span></div>`;
+ if(asOf>='2026-12-24'||dec.n)now.push(decLine);else later.push(decLine);
+ return `<div class="card" id="h50weigh"><h3>Weigh-ins</h3><p class="muted">Same weight log as Food. Days without a weigh-in are left out of the average.</p>${now.join('')||'<p class="muted">No weigh-ins in the challenge yet.</p>'}${later.length?`<details><summary>Later weeks</summary>${later.join('')}</details>`:''}</div>`}
 
 function h50Start(){const t=typeof today==='function'?today():H50_START,d=t<H50_START?H50_START:(t>H50_END?H50_END:t);h50EnrollPut(S,d);save();h50Paint();toast('Started '+d+'. Earlier days stay optional.')}
 function h50ClearStart(){delete h50Write().enrolled;save();h50Paint()}

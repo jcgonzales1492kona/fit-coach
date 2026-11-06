@@ -22,9 +22,11 @@ function fail(msg){console.error(msg);process.exitCode=1}
 await page.goto(`http://127.0.0.1:${port}/test/holiday-harness.html`,{waitUntil:'domcontentloaded'});
 await page.waitForFunction(()=>document.documentElement.dataset.ready==='1',{timeout:15000});
 const text=await page.locator('body').innerText();
-for(const s of ['Sample data. Not a real log.','Challenge tracker','Day 2 of 50','Pull','Sample push','not a completed workout','Self-confirmed','Saved goals','1720','not marked medically approved','no default of 7,000','Workouts checked']){
+for(const s of ['EXAMPLE DATA','Challenge tracker','November 5 to December 24, 2026','Day 2 of 50','Friday, November 6, 2026','Pull','Sample push','not a completed workout','Self-confirmed','no default of 7,000','Workouts checked','November 2026']){
   if(!text.includes(s))fail('holiday view missing: '+s);
 }
+const help=await page.locator('#h50help').innerHTML();
+if(!help.includes('1720')||!help.includes('not marked medically approved'))fail('saved goals note missing from help');
 if(/Connect Google|client ID|Import calendar|oauth/i.test(text))fail('sync copy is still in the tracker');
 const days=await page.locator('#h50grid [data-day]').count();
 if(days!==50)fail('tracker has '+days+' days');
@@ -35,17 +37,15 @@ if(/[\u2013\u2014]/.test(text))fail('dash in holiday view');
 if(/cheat|perfect day|catch up/i.test(text))fail('graded copy leaked');
 const overflow=await page.evaluate(()=>({sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth}));
 if(overflow.sw>overflow.cw+1)fail('horizontal overflow '+JSON.stringify(overflow));
-await page.locator('#h50grid').scrollIntoViewIfNeeded();
-await page.screenshot({path:path.join(out,'holiday_grid.png')});
+await page.addStyleTag({content:'nav{display:none !important}body{padding-bottom:12px !important}'});
 await page.evaluate(()=>window.scrollTo(0,0));
-await page.screenshot({path:path.join(out,'holiday_day.png')});
-await page.locator('#h50checks').scrollIntoViewIfNeeded();
-await page.screenshot({path:path.join(out,'holiday_checks.png')});
-await page.locator('#h50-copy').scrollIntoViewIfNeeded();
-await page.screenshot({path:path.join(out,'holiday_checkin.png')});
-await page.locator('#h50move').evaluate(el=>el.scrollIntoView({block:'start'}));
-await page.evaluate(()=>window.scrollBy(0,-64));
-await page.screenshot({path:path.join(out,'holiday_movement.png')});
+const gridCut=await page.locator('#h50grid .h50wk').nth(1).evaluate(el=>Math.ceil(el.getBoundingClientRect().top));
+await page.setViewportSize({width:390,height:gridCut+8});
+await page.screenshot({path:path.join(out,'holiday_grid.png')});
+await page.addStyleTag({content:'header{display:none !important}'});
+await page.locator('#h50day').screenshot({path:path.join(out,'holiday_checks.png')});
+await page.locator('#h50checkin').screenshot({path:path.join(out,'holiday_checkin.png')});
+await page.setViewportSize({width:390,height:844});
 await page.locator('#h50-copy').click();
 await page.waitForSelector('#h50-preview');
 const preview=await page.locator('#h50-preview').innerText();
@@ -77,7 +77,7 @@ app.on('console',m=>{if(m.type()==='error'&&!/404|favicon/i.test(m.text()))appEr
 await app.goto(`http://127.0.0.1:${port}/index.html#holiday`,{waitUntil:'domcontentloaded'});
 await app.waitForSelector('#h50grid');
 const empty=await app.locator('#holiday').innerText();
-if(!empty.includes('Challenge tracker')||!empty.includes('Self-confirmed'))fail('empty tracker missing');
+if(!empty.includes('Challenge tracker')||!empty.includes('November 5 to December 24, 2026')||!empty.includes('Tap a day'))fail('empty tracker missing');
 if(/Connect Google|client ID|Import calendar|oauth/i.test(empty))fail('empty tracker still offers a calendar connection');
 if(await app.locator('#h50grid [data-day]').count()!==50)fail('empty grid is not 50 days');
 if(await app.locator('script[src*="accounts.google"],script[src*="googleapis"]').count())fail('Google script loaded without a request');
