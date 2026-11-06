@@ -3,6 +3,7 @@
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 header{position:sticky;top:0;z-index:5;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;font-weight:800;font-size:20px;background:#121212f0;backdrop-filter:blur(10px)}
 main{max-width:520px;margin:0 auto;padding:0 14px}
+section.tab{scroll-margin-top:calc(56px + env(safe-area-inset-top))}
 .card{background:var(--c1);border-radius:20px;padding:16px;margin:12px 0}
 .card.flat{padding:4px 14px}
 h2{margin:2px 0;font-size:28px;font-weight:800;letter-spacing:-.5px}h3{margin:0 0 8px;font-size:17px}
@@ -158,3 +159,37 @@ input,select{box-sizing:border-box;max-width:100%;min-width:0}input[type=date]{-
 .cyc{flex:1 0 44px;min-width:44px;min-height:44px;border:0;border-radius:12px;background:var(--c2);color:#fff;font-family:inherit;padding:4px 2px}
 .cyc b{display:block;font-size:10px;font-weight:650}.cyc small{display:block;font-size:13px;font-weight:750}
 .cyc.on{background:#fff;color:#000}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.h50count{display:inline-block;background:var(--c2);color:#d1d1d6;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.h50legend{margin:0 0 8px;color:#d1d1d6;font-size:13px}.h50legend b{color:#fff}
+.h50month{margin:16px 0 2px;font-size:16px;letter-spacing:0;text-transform:none;color:#fff}
+.h50wk{margin-top:12px}.h50wkhead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px;align-items:baseline;margin:0 0 6px}
+.h50wkhead b{font-size:14px}.h50wkhead span{color:var(--m);font-size:12px}
+.h50cells{display:flex;flex-wrap:wrap;gap:6px}
+.h50cell{width:64px;min-height:76px;border:0;border-radius:14px;background:var(--c2);color:#fff;font:inherit;padding:6px 2px 4px}
+.h50cell b{display:block;font-size:16px}.h50cell small{display:block;color:var(--m);font-size:11px}
+.h50cell em{display:block;font-style:normal;font-size:9px;color:#d1d1d6;margin-top:2px}
+.h50cell.on{outline:2px solid #fff}.h50cell.before{opacity:.7}
+.h50dots{display:flex;justify-content:center;gap:2px;margin-top:4px}
+.h50dots i{font-style:normal;width:14px;height:14px;border-radius:4px;border:1px solid #636366;color:#8e8e93;font-size:9px;line-height:12px;font-weight:700}
+.h50dots i.on{background:#fff;color:#000;border-color:#fff}.h50dots i.part{border-color:#ff9f0a;color:#ff9f0a}
+#h50checks .chip{min-height:44px}
+.h50go{display:block;width:100%;text-align:left;color:#fff;font:inherit;cursor:pointer}
+.h50go b{display:block;font-size:17px}.h50go small{display:block;color:var(--m);font-size:13px;margin-top:4px;line-height:1.4}
+.h50def p{color:#d1d1d6;font-size:14px;line-height:1.45}
+.h50note{background:#2C2C2E;border-radius:14px;padding:10px 12px;color:#d1d1d6;font-size:14px;line-height:1.4}
+.h50nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}
+.h50nav button{min-width:64px;min-height:44px;background:var(--c1);color:#fff;border:0;border-radius:12px;font:inherit;font-weight:700}
+.h50strip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.h50strip::-webkit-scrollbar{display:none}
+.h50d{flex:1 0 44px;min-width:44px;min-height:44px;border:0;border-radius:12px;background:var(--c2);color:#fff;font:inherit;padding:4px 2px}
+.h50d b,.h50d small{display:block}.h50d small{font-size:13px;font-weight:750}.h50d.on{background:#fff;color:#000}
+.h50ev{margin:6px 0;padding-left:18px;color:#d1d1d6;font-size:14px;line-height:1.4}
+.h50ev li{margin:4px 0}
+.copypre{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.45;background:#161618;border-radius:12px;padding:10px;max-height:40vh;overflow:auto}
+.trpick select{width:auto;min-height:44px;margin:0;padding:8px}
+.trli{grid-template-columns:64px 1fr auto}
+.logstat .chip,.h50nav button,.h50d{min-height:44px}
+nav button{min-width:0;padding-left:2px;padding-right:2px}
+textarea{width:100%;background:var(--c2);border:0;color:var(--t);border-radius:12px;padding:12px;font-size:16px;margin:4px 0;font-family:inherit}
+#h50fresh{font-size:14px;line-height:1.4}

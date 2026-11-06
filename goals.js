@@ -50,7 +50,7 @@ function goalCard(){const g=S.settings,u=gU(),G=goalState(),R=goalCalc();let h='
  else h+=`<p class="muted">Log a few more weigh-ins to see your real trend. It shows after ${GOAL_MIN_DAYS} days and ${GOAL_MIN_N} weigh-ins. So far: ${R.T.count} over ${R.T.span+1} day${R.T.span?'s':''}${R.T.anchored?', counting your start':''}.</p>`;
  if(R.pl)h+=`<p class="gl"><b>Your plan:</b> ${R.pl.def>0?`about ${gNum(R.pl.rate)} ${u}/week (${g.tdee} maintenance minus ${g.kcal} target = ${R.pl.def} kcal/day)`:`no deficit (target ${g.kcal} is at or above maintenance ${g.tdee})`}. Realistic range: ${u==='kg'?'0.35 to 0.45 kg':'0.75 to 1 lb'}/week.</p>`;
  else h+=`<p class="muted">Add your maintenance calories in Settings to see your plan rate.</p>`;
- const iv=goalIntake();if(iv&&g.tdee)h+=`<p class="muted">If you hit your calories: your last ${iv.days} logged day${iv.days>1?'s':''} averaged ${iv.kcal} kcal, about ${gNum(Math.max(0,(g.tdee-iv.kcal)*7/3500*gLb()))} ${u}/week at ${g.tdee} maintenance.</p>`;
+ const iv=goalIntake();if(iv&&g.tdee)h+=`<p class="muted">Confirmed complete days only: the last ${iv.days} averaged ${iv.kcal} kcal. Unknown and partial days are not included, and missing days are not treated as zero.</p>`;
  if(R.recal)h+=`<div class="gsug"><div><b>Real maintenance looks like about ${R.recal} kcal</b><small>From your ${R.tr.span+1}-day trend, assuming you eat about ${g.kcal} a day.</small></div>${Math.abs(R.recal-(g.tdee||0))>=20?`<button class="btn sm" onclick="goalUseTdee(${R.recal},'trend')">Use this</button>`:'<span class="pill">In use</span>'}</div>`;
  // goals
  h+=['m1','m6','lt'].map(k=>{const o=R.goals.find(x=>x.k===k);if(!o)return `<div class="grow1"><div><b>${GOAL_NAMES[k]}</b><small>Not set</small></div><button class="btn sec sm" onclick="goalForm('${k}')">Set</button></div>`;
@@ -64,7 +64,7 @@ function goalCard(){const g=S.settings,u=gU(),G=goalState(),R=goalCalc();let h='
    else s=`${gNum(o.remToday)} ${u} to go from ${today_} (${gNum(o.rem)} by 7-day average). `;
    if(R.early)s+=`<span class="gneu">Too early to judge, keep weighing in.</span>${onPlan}`;
    else if(R.moving)s+=`At your current pace you'd get there around <b>${gFmt(o.projN)}</b>. `+(o.tN?(o.onTrack?'<span class="gok">On track.</span>':`<span class="gwarn">About ${Math.max(1,Math.round((o.projN-o.tN)/7))} week${Math.round((o.projN-o.tN)/7)>1?'s':''} behind.</span>`):'');
-   else if(R.gentle)s+=`<span class="gneu">Your average is up a little, but ${today_} is at or below your ${gNum(R.startW)} ${u} start, so this is likely water. Stick with the plan.</span>${onPlan}`;
+   else if(R.gentle)s+=`<span class="gneu">Your average is up a little, and ${today_} is at or below your ${gNum(R.startW)} ${u} start. That can happen for more than one reason. This is not a conclusion about why.</span>${onPlan}`;
    else s+=`<span class="gwarn">At this pace you won't reach it.</span> Try logging every bite for a week and check your maintenance number.${onPlan}`;
    if(o.past)s+=' The target date has passed, so set a new one when you are ready.';
    else if(o.fast)s+=` <span class="gwarn">Faster than your coach recommends (needs ${gNum(o.need)} ${u}/week).</span>`}
@@ -72,7 +72,8 @@ function goalCard(){const g=S.settings,u=gU(),G=goalState(),R=goalCalc();let h='
  if(coachDiff){const c=GOAL_COACH,L=gLb();h+=`<div class="gsug"><div><b>Coach suggestion</b><small>${gNum(c.m1.w*L)} ${u} by ${gFmt(gDay(c.m1.date))}, ${gNum(c.m6.w*L)} ${u} by ${gFmt(gDay(c.m6.date))}, long-term ${gNum(c.lt.w*L)} ${u}. Paced from ${gNum(GOAL_START.w*L)} ${u} on ${gFmt(gDay(GOAL_START.d))}.</small></div><button class="btn sm" onclick="goalCoach()">Apply</button></div>`}
  if(S.weights.length&&(R.goals.length||R.rate))h+=`<div class="chips gview"><button class="chip ${S.goalView!=='6m'?'on':''}" onclick="S.goalView='1m';save();renderFood()">Next month</button><button class="chip ${S.goalView==='6m'?'on':''}" onclick="S.goalView='6m';save();renderFood()">Long view</button></div>`;
  return h+'</div>'}
-function goalIntake(){const days=[];for(let i=1;i<=7;i++){const d=new Date();d.setDate(d.getDate()-i);const k=d.toLocaleDateString('en-CA');if((S.log[k]||[]).length)days.push(dayTotals(k).kcal)}
+function goalIntake(){const days=[];for(let i=1;i<=7;i++){const d=new Date();d.setDate(d.getDate()-i);const k=d.toLocaleDateString('en-CA');
+ if(typeof trendStatus==='function'&&trendStatus(S.logStatus,k)!=='complete')continue;if((S.log[k]||[]).length)days.push(dayTotals(k).kcal)}
  return days.length?{days:days.length,kcal:Math.round(avg(days))}:null}
 function goalForm(k){const G=goalState(),o=G[k],u=gU(),def=o&&o.date?o.date:(GOAL_SPAN[k]?gDate(gDay(today())+GOAL_SPAN[k]):'');
  modal(`<h3>${GOAL_NAMES[k]}</h3><label>Goal weight (${u})<input id="gw" type="number" step="0.1" inputmode="decimal" value="${o?o.w:''}"></label>
