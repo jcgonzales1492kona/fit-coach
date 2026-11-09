@@ -222,10 +222,11 @@ function renderHoliday(){
   ${h50CheckButtons(iso)}
   <div class="trwin" role="group" aria-label="Training note">${[['unknown','No note'],['plan','Planned training'],['rest','Planned rest'],['clinic','Clinic-restricted'],['medical','Medical rest']].map(([v,l])=>`<button type="button" class="chip${train===v?' on':''}" aria-pressed="${train===v?'true':'false'}" onclick="h50TrainSet('${iso}','${v}')">${l}</button>`).join('')}</div>
   <p class="muted">${train==='medical'?'Medical rest. No steps or workout are required. A blank session stays unknown.':train==='clinic'?'Clinic-restricted. This does not mean a walk or a row is allowed.':train==='rest'?'Planned rest. Empty checks are not a miss.':train==='plan'?'Planned training. The plan is not a completed session.':'No training note.'}</p>
-  <details id="h50more"><summary>Weight, reflection, and notes</summary>
-  <p class="muted">${h50DayWeight(S.weights,iso,unit)}.</p>
-  <label>Weight for this date, optional<input id="h50wt" inputmode="decimal" placeholder="Leave blank to add nothing"></label>
-  <button type="button" class="btn sec" onclick="h50WeightSave()">Save weight in the weight log</button>
+  <h4>Weight</h4>
+  <p id="h50wline">${h50WeightBlurb(S.weights,iso,unit)}</p>
+  <div class="inl"><input id="h50wt" inputmode="decimal" aria-label="Weight for this date" value="${h50WeightField(S.weights,iso)}" placeholder="Type if this date has none"><button type="button" class="btn" onclick="h50WeightSave()">Save</button></div>
+  <p class="muted">Same list as Food. Saving again updates this date. It does not add a second weigh-in.</p>
+  <details id="h50more"><summary>Reflection and notes</summary>
   <label>Movement, in your words, optional<input id="h50mlabel" maxlength="80" value="${h50Esc(h.moveLabel||'')}" onchange="h50MoveLabelSet(this.value)" placeholder="Only if you want a name for it"></label>
   <label>One-line reflection, optional<input id="h50note" maxlength="280" value="${h50Esc(day.note||'')}" onchange="h50NoteSet('${iso}',this.value)"></label>
   <label>Context tag, optional<select aria-label="Context tag" onchange="h50ContextSet('${iso}',this.value)">${[['','None'],['cycle','Cycle'],['travel','Travel'],['event','Event'],['other','Other']].map(([v,l])=>`<option value="${v}"${(day.context||'')===v?' selected':''}>${l}</option>`).join('')}</select></label>
@@ -292,12 +293,19 @@ function h50GoalSet(v){const res=h50GoalPut(S,v);if(!res.ok){toast(res.error);re
 function h50Toggle(iso,key){const day=(h50Read(S).days||{})[iso]||{};const on=!(day.checks&&day.checks[key]);const res=h50CheckPut(S,iso,key,on);
  if(!res.ok){toast(res.error||'That check did not save.');return}save();h50Paint()}
 function h50MoveLabelSet(v){h50MoveLabelPut(S,v);save()}
-function h50WeightSave(){const iso=h50Selected(),raw=$('#h50wt')?String($('#h50wt').value||'').trim():'';
- if(!raw){toast('No weight entered. Nothing was added.');return}const w=Math.round((+raw)*10)/10;if(!(w>0)){toast('Enter a weight to save it. Nothing was added.');return}
- const food=JSON.stringify(S.log),sessions=JSON.stringify(S.sessions),goals=JSON.stringify(S.settings);
- S.weights=(S.weights||[]).filter(x=>!x||x.d!==iso);S.weights.push({d:iso,w});S.weights.sort((a,b)=>a.d<b.d?-1:1);
+function h50WeightField(weights,iso){const rows=typeof weightOn==='function'?weightOn(weights,iso):[];return rows.length?String(rows[rows.length-1].w):''}
+function h50WeightBlurb(weights,iso,unit){const rows=typeof weightOn==='function'?weightOn(weights,iso):[];
+ if(!rows.length)return 'No weigh-in on this date yet.';
+ if(rows.length===1)return rows[0].w+' '+unit+' on this date, from the Food weight log.';
+ return rows.length+' saved numbers on this date. The newest is '+rows[rows.length-1].w+' '+unit+'. Saving keeps one number for this date and leaves other dates as they are.'}
+function h50SameRows(a,b){const key=rows=>(rows||[]).map(x=>x&&x.d+'|'+x.w).sort().join('\n');return key(a)===key(b)}
+function h50WeightSave(){const iso=h50Selected(),raw=$('#h50wt')?String($('#h50wt').value||'').trim().replace(',','.'):'';
+ if(!raw){toast('Nothing typed. This date was left as it is.');return}const w=Math.round((+raw)*10)/10;if(!(w>0)){toast('Type a weight to save this date.');return}
+ const food=JSON.stringify(S.log),sessions=JSON.stringify(S.sessions),goals=JSON.stringify(S.settings),others=(S.weights||[]).filter(x=>x&&x.d!==iso);
+ const next=weightSet(S.weights,iso,w);
  if(JSON.stringify(S.log)!==food||JSON.stringify(S.sessions)!==sessions||JSON.stringify(S.settings)!==goals){toast('Stopped. Saved logs would have changed.');return}
- save();h50Paint();toast('Weight saved in your weight log.')}
+ if(!h50SameRows(others,next.filter(x=>x.d!==iso))){toast('Stopped. Another date would have changed.');return}
+ S.weights=next;save();h50Paint();toast('Saved for this date.')}
 function h50Copy(opts){if(opts)h50CopyOpts=Object.assign({context:false,priv:false},opts);const week=h50Week(h50Selected());
  const text=h50CoachText(S,week.id,h50CopyOpts,typeof today==='function'?today():h50Selected());window.__coachText=text;
  modal(`<h3>Copy for Coach</h3><p class="muted">This is the text that will be copied. Context tags and private notes stay off unless you include them.</p>

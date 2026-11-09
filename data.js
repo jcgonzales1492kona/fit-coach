@@ -161,7 +161,11 @@ Chickpea pasta, dry|339|23.2|57.1|6.3
 Garlic, raw|149|6.4|33.1|0.5
 Lemon juice|22|0.4|6.9|0.2
 Green chiles, canned|21|0.7|4.6|0.3
-High-fiber whole wheat tortilla|157|11.4|44.3|5.7`;
+High-fiber whole wheat tortilla|157|11.4|44.3|5.7
+Potato, raw|77|2.1|17.5|0.1
+Chicken broth|7|1.4|0.4|0
+Cornstarch|381|0.3|91.3|0.1
+Worcestershire sauce|78|0|19.5|0`;
 const FOODS=FOODS_RAW.split('\n').map((l,i)=>{const[n,k,p,c,f]=l.split('|');return{id:'b'+i,name:n,kcal:+k,p:+p,c:+c,f:+f}});
 // exercises: name|primary muscle|type(c=compound,i=isolation)
 const EX_RAW=`Barbell Bench Press|chest|c
