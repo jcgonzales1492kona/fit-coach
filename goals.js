@@ -10,9 +10,21 @@ const gLb=()=>S.settings.unit==='kg'?0.45359237:1;
 const gU=()=>S.settings.unit||'lb';
 const gNum=x=>(Math.round(x*10)/10).toLocaleString();
 function goalState(){S.goals||={};return S.goals}
-/* 7-day moving average by calendar day (entry plus any entries in the 6 days before it) */
+/* 7-day moving average by calendar day. For each weigh-in, mean of the entries on that date and the 6 days before it.
+   A day with no entry is skipped, not treated as zero. Two entries on one date both count. */
 function wMA(){const W=[...S.weights].sort((a,b)=>a.d<b.d?-1:1).map(x=>({d:x.d,n:gDay(x.d),w:+x.w}));
  return W.map((x,i)=>{const win=W.filter(y=>y.n<=x.n&&y.n>x.n-7);return{...x,ma:win.reduce((a,y)=>a+y.w,0)/win.length}})}
+/* Axis labels a person can match to the list. Always include the latest weigh-in, not only the chart ends. */
+function weightAxisTicks(min,max,marks){min=Math.round(min);max=Math.round(max);if(!(max>min))return [min];
+ const span=max-min,must=[min],count=span>200?5:4,gap=Math.max(4,Math.round(span/7));
+ (marks||[]).forEach(n=>{n=Math.round(n);if(n>min&&n<max)must.push(n)});must.push(max);
+ const rough=[];for(let i=1;i<count-1;i++)rough.push(min+Math.round(span*i/(count-1)));
+ const mustSet=new Set(must),pool=[...new Set([...must,...rough])].sort((a,b)=>a-b),out=[];
+ pool.forEach(n=>{if(!out.length){out.push(n);return}const prev=out[out.length-1];
+  if(n-prev>=gap){out.push(n);return}
+  if(mustSet.has(n)&&!mustSet.has(prev))out[out.length-1]=n;
+  else if(mustSet.has(n)&&mustSet.has(prev)&&n!==prev)out.push(n)});
+ if(out[out.length-1]!==max)out.push(max);return out}
 const GOAL_MIN_DAYS=14,GOAL_MIN_N=7;
 /* Regression on the 7-day average over the last 28 days. While real data spans under 14 days, the coach start weight
    (if applied) is added as the first point so one water spike cannot drive the line. Needs 7 points over 14+ days. */
@@ -90,7 +102,7 @@ function goalUseTdee(v,src){S.settings.tdee=v;S.settings.tdeeSrc=src;save();toas
 /* chart: weights, 7-day average, expected range band, projection, goal markers */
 function drawWeight(){const R=goalCalc(),M=R.M.slice(-60),u=gU(),L=gLb();if(!M.length)return;
  const ds=[{label:'Weight',data:M.map(x=>({x:x.n,y:x.w})),borderColor:'#8E8E93',backgroundColor:'#8E8E93',pointRadius:2,showLine:false},
-  {label:'7-day avg',data:M.map(x=>({x:x.n,y:Math.round(x.ma*10)/10})),borderColor:'#22c55e',pointRadius:0,tension:.3,borderWidth:2}];
+  {label:'7-day avg',data:M.map(x=>({x:x.n,y:Math.round(x.ma*10)/10})),borderColor:'#22c55e',backgroundColor:'#22c55e',pointRadius:M.map((_,i)=>i===M.length-1?3:0),tension:.3,borderWidth:2}];
  const gs=R.goals.filter(o=>!o.reached),view=S.goalView==='6m'?'6m':'1m';
  let end=R.curN+35;const ends=gs.map(o=>o.tN||o.projN||o.planN).filter(Boolean);
  if(view==='1m'){const m1=R.goals.find(o=>o.k==='m1');end=Math.max(end,m1&&m1.tN?m1.tN+3:0)}else end=Math.max(end,...ends.map(n=>n+7));
@@ -106,7 +118,7 @@ function drawWeight(){const R=goalCalc(),M=R.M.slice(-60),u=gU(),L=gLb();if(!M.l
   else if(!o.tN||o.tN>end)ds.push({label:GOAL_NAMES[o.k]+(o.tN?' (later)':''),data:[{x:M[0].n,y:o.g.w},{x:end,y:o.g.w}],borderColor:col[o.k]+'99',borderDash:[2,4],borderWidth:1,pointRadius:0})});
  const ys=ds.flatMap(s=>s.data.map(p=>p.y)),ymin=Math.min(...ys),ymax=Math.max(...ys);
  const xmin=R.anc&&R.anc.n<M[0].n&&R.anc.n>=M[0].n-28?R.anc.n:M[0].n;
- mkChart('wchart','line',[],ds,{scales:{x:{type:'linear',min:xmin,max:end,ticks:{color:'#94a3b8',maxTicksLimit:view==='6m'?6:5,maxRotation:0,callback:v=>view==='6m'?gMon(v):gFmt(v).replace(/, \d{4}$/,'')},grid:{color:'#1e293b'}},
+ mkChart('wchart','line',[],ds,{scales:{x:{type:'linear',min:xmin,max:end,afterBuildTicks(scale){const vals=weightAxisTicks(scale.min,scale.max,[R.curN]);scale.ticks=vals.map(value=>({value}))},ticks:{color:'#94a3b8',autoSkip:false,maxRotation:0,callback:v=>view==='6m'?gMon(v):gFmt(v).replace(/, \d{4}$/,'')},grid:{color:'#1e293b'}},
    y:{min:Math.floor(ymin-1),max:Math.ceil(ymax+1),ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}},
   plugins:{legend:{labels:{color:'#cbd5e1',boxWidth:10,font:{size:10},filter:i=>!i.text.startsWith('_')}},tooltip:{callbacks:{title:it=>it.length?gFmt(it[0].parsed.x):'',label:c=>`${c.dataset.label}: ${gNum(c.parsed.y)} ${u}`}}}})}
 /* macro calculator (Settings) */

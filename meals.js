@@ -69,8 +69,15 @@ const MEAL_COURSE_NAME={
  'stealth-health chicken pasta salad':'lunch',
  'sheet pan turkey tacos with cottage cheese queso':'dinner',
  'baked ziti':'dinner',
- 'high-protein baked ziti':'dinner'};
-function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST]}
+ 'high-protein baked ziti':'dinner',
+ 'chicken + gravy protein mash bowls':'dinner'};
+/* Card calories and protein. Carbs and fat are estimates from the foods above.
+   Mash ingredients are 1,120 g of the about 1,560 g batch. The rest is not in this meal. Spices are omitted. */
+const MEAL_MASH={name:'Chicken + Gravy Protein Mash Bowls',course:'dinner',servings:4,cook:{kcal:530,p:56},
+ label:{kcal:530,p:56,c:66.1,f:11.7},
+ items:[['Potato, raw',1005],['Cottage cheese 2%',287],['Greek yogurt nonfat plain',215],['Butter',11],['Chicken broth',536],['Chicken breast, raw',680],['Mushrooms',227],['Onion',150],['Garlic, raw',6],['Olive oil',10],['Cornstarch',20],['Worcestershire sauce',5],['Green beans',340]],
+ note:'Per serving: one bowl, about 645 g cooked (280 g protein mash, 125 g sliced chicken, 160 g mushroom gravy, 80 g green beans). Card numbers are 530 kcal and 56 g protein. Carbs and fat are estimates. This uses 1,120 g of about 1,560 g of mash. Spices are omitted.'};
+function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST,MEAL_MASH]}
 /* Exact name only. High-Protein Baked Ziti stays. Logged entries keep their saved numbers. */
 function mealDropPlainZiti(){if(S.mig.mealDropPlainZiti)return;const next=S.meals.filter(m=>(m.name||'').trim().toLowerCase()!=='baked ziti');
  if(next.length!==S.meals.length)S.meals=next;S.mig.mealDropPlainZiti=1;save()}
@@ -84,7 +91,7 @@ function mealEnsureShipped(){S.mig.mealHide||={};const base=Date.now();let chang
  mealShipped().forEach((seed,i)=>{const key=seed.name.toLowerCase();if(S.mig.mealHide[key])return;
   if(S.meals.some(m=>m.name.toLowerCase()===key))return;
   const items=seed.items.map(([n,g])=>{const f=FOODS.find(x=>x.name===n);return f?{fid:f.id,g}:null});if(items.some(x=>!x))return;
-  const row={id:'m'+(base+50+i),name:seed.name,servings:seed.servings,items,note:seed.note||'',label:null,course:seed.course||mealGuessCourse(seed.name)};
+  const row={id:'m'+(base+50+i),name:seed.name,servings:seed.servings,items,note:seed.note||'',label:seed.label?{...seed.label}:null,course:seed.course||mealGuessCourse(seed.name)};
   if(seed.cook)row.cook={...seed.cook};S.meals.push(row);changed=true});
  (S.meals||[]).forEach(m=>{if(m.course==='breakfast'||m.course==='lunch'||m.course==='dinner')return;m.course=mealGuessCourse(m.name);changed=true});
  if(changed)save()}

@@ -111,7 +111,7 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  ${typeof holidayEntry==='function'?holidayEntry():''}
  ${trendCard()}
  <div class="card" id="foodweight"><h3>Body weight</h3><p class="muted">Type today's number. Holiday 50 reads this same list.</p><div class="inl"><input id="bw" type="text" inputmode="decimal" autocomplete="off" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div>
- ${S.weights.length?`<p class="muted">Latest ${S.weights.at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>${weighList()}`:'<p class="muted">No entries yet.</p>'}</div>
+ ${S.weights.length?`<p class="muted">Latest ${wMA().at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>${weighList()}`:'<p class="muted">No entries yet.</p>'}</div>
  ${goalCard()}`;
  if(S.weights.length)drawWeight()}
 const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
