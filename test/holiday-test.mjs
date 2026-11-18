@@ -158,6 +158,13 @@ eq(round.log['2026-11-05'][0].kcal,500,'export keeps food');
 eq(round.holiday50.days['2026-11-05'].note,'Walked the long way','export keeps challenge notes');
 eq(round.logStatus['2026-11-05'],'complete','export keeps logging status');
 eq(round.settings.kcal,1720,'export keeps saved goals');
+const page=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const appSrc=fs.readFileSync(path.join(root,'app.js'),'utf8');
+assert(!page.includes('data-t="holiday"'),'the nav has no Holiday tab');
+assert(!page.includes('id="holiday"'),'the page has no Holiday section');
+assert(!appSrc.includes('holidayEntry()'),'Food and Progress do not show the challenge card');
+assert(!/delete S\.holiday50|S\.holiday50\s*=\s*null/.test(appSrc),'startup does not erase saved challenge checks');
+assert(fs.existsSync(path.join(root,'holiday.js')),'the challenge code remains for a later restore');
 
 console.log(fail?`failed ${fail}, passed ${pass}`:`passed ${pass}`);
 process.exit(fail?1:0);

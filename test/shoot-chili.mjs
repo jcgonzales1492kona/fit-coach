@@ -37,7 +37,7 @@ const info=await page.evaluate(()=>{
 });
 if(info.n!==1||info.course!=='dinner'||info.kcal!==670||info.p!==52||info.c!==73||info.f!==17)fail('meal '+JSON.stringify(info));
 if(!info.keep||info.oats!=='Example oats'||info.goal!==1800)fail('saved data changed '+JSON.stringify(info));
-if(!info.cache.includes('v=45'))fail('cache '+info.cache);
+if(!info.cache.includes('v=46'))fail('cache '+info.cache);
 await page.addStyleTag({content:'header,nav{display:none !important}'});
 await page.locator('.mcourse',{hasText:'Dinner'}).locator('button.mdd').click();
 await page.waitForSelector('#mmenu-dinner:not([hidden])');

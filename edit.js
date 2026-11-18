@@ -40,4 +40,4 @@ function weightOn(weights,date){return (Array.isArray(weights)?weights:[]).filte
 function weightSet(weights,date,w){const next=(Array.isArray(weights)?weights:[]).filter(x=>x&&x.d!==date);
  if(w!=null&&isFinite(+w)&&+w>0)next.push({d:date,w:Math.round(+w*10)/10});
  next.sort((a,b)=>String(a.d)<String(b.d)?-1:String(a.d)>String(b.d)?1:0);return next}
-function showWeight(){const t=(location.hash||'').replace('#','');if(t==='holiday'&&typeof renderHoliday==='function')renderHoliday();else if(typeof renderFood==='function')renderFood()}
+function showWeight(){if(typeof renderFood==='function')renderFood()}
