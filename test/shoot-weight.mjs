@@ -36,38 +36,23 @@ await page.addStyleTag({content:'nav{display:none !important}body{padding-bottom
 await page.locator('#foodweight').evaluate(el=>{const p=document.createElement('p');p.textContent='EXAMPLE DATA. Not a real log.';p.style.cssText='margin:0 0 8px;font-weight:700';el.prepend(p)});
 await page.locator('#foodweight').screenshot({path:path.join(out,'weight_food_example.png')});
 if(!(await page.locator('#foodweight').innerText()).includes('181.4'))fail('food list missing 181.4');
-await page.locator('nav').evaluate(el=>{el.style.display='flex'});
-await page.evaluate(()=>show('holiday'));
-await page.waitForSelector('#h50wline');
-const hol=await page.locator('#h50day').innerText();
-if(!hol.includes('181.4')||!hol.includes('Friday, November 6, 2026'))fail('holiday did not show the food weigh-in');
-await page.addStyleTag({content:'header,nav{display:none !important}'});
-await page.locator('#h50day').evaluate(el=>{const p=document.createElement('p');p.textContent='EXAMPLE DATA. Not a real log.';p.style.cssText='margin:0 0 8px;font-weight:700';el.prepend(p)});
-await page.locator('#h50day').screenshot({path:path.join(out,'weight_holiday_example.png')});
-await page.locator('[data-day="2026-11-07"]').click();
-const other=await page.locator('#h50wline').innerText();
-if(other.includes('181.4'))fail('Nov 7 showed Nov 6');
-await page.locator('#h50wt').fill('177.2');
-await page.locator('#h50day button',{hasText:'Save'}).click();
-await page.locator('#h50wt').fill('177.2');
-await page.locator('#h50day button',{hasText:'Save'}).click();
-await page.locator('#h50checks [data-check="move"]').click();
+if(/Holiday/i.test(await page.locator('nav').innerText()))fail('Holiday is still in the nav');
+await page.locator('#bw').fill('177.2');
+await page.locator('#foodweight button',{hasText:'Log'}).click();
+await page.locator('#bw').fill('177.2');
+await page.locator('#foodweight button',{hasText:'Log'}).click();
 const counts=await page.evaluate(()=>({
   six:S.weights.filter(x=>x.d==='2026-11-06').length,
-  seven:S.weights.filter(x=>x.d==='2026-11-07').map(x=>x.w),
+  today:S.weights.filter(x=>x.d===today()).map(x=>x.w),
   old:S.weights.find(x=>x.d==='2020-01-01').w,
   name:S.log['2020-01-01'][0].name,
   kcal:S.settings.kcal
 }));
-if(counts.six!==1||counts.seven.length!==1||counts.seven[0]!==177.2||counts.old!==150||counts.name!=='Example oats'||counts.kcal!==1800)fail('shared log changed '+JSON.stringify(counts));
+if(counts.six!==1||counts.today.length!==1||counts.today[0]!==177.2||counts.old!==150||counts.name!=='Example oats'||counts.kcal!==1800)fail('weight log changed '+JSON.stringify(counts));
 await page.reload({waitUntil:'domcontentloaded'});
-await page.evaluate(()=>show('holiday'));
-await page.waitForSelector('#h50grid');
-await page.locator('[data-day="2026-11-07"]').click();
-if(!(await page.locator('#h50wline').innerText()).includes('177.2'))fail('reload lost the shared weigh-in');
-await page.evaluate(()=>show('food'));
 await page.waitForSelector('#foodweight');
-if(!(await page.locator('#foodweight').innerText()).includes('177.2'))fail('food did not show the holiday weigh-in');
+if(!(await page.locator('#foodweight').innerText()).includes('177.2'))fail('reload lost the weigh-in');
+if(!(await page.locator('#foodweight').innerText()).includes('181.4'))fail('reload lost the earlier weigh-in');
 if(errors.length)fail('console '+errors.join(' | '));
 console.log(process.exitCode?'weight browser checks failed':'weight browser checks passed');
 await browser.close();

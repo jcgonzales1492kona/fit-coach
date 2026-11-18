@@ -80,7 +80,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 function show(t){if(t!=='workout'&&typeof KP!=='undefined'&&KP)closeKP(false);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
  document.querySelectorAll('section.tab').forEach(s=>s.hidden=s.id!==t);
- const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings,holiday:typeof renderHoliday==='function'?renderHoliday:null}[t]||renderFood;fn();location.hash=t;window.scrollTo(0,0)}
+ if(t==='holiday')t='food';const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn();location.hash=t;window.scrollTo(0,0)}
 
 /* ---------- food ---------- */
 const QA_MAX=6;let qaOpen=false;
@@ -108,9 +108,8 @@ function renderFood(){const t=dayTotals(viewDate),g=S.settings,entries=S.log[vie
  <button class="link" onclick="customFoodForm()">+ Create custom food</button></div>
  ${slotLogCard(entries)}
  ${typeof trendStatusCard==='function'?trendStatusCard(viewDate):''}
- ${typeof holidayEntry==='function'?holidayEntry():''}
  ${trendCard()}
- <div class="card" id="foodweight"><h3>Body weight</h3><p class="muted">Type today's number. Holiday 50 reads this same list.</p><div class="inl"><input id="bw" type="text" inputmode="decimal" autocomplete="off" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div>
+ <div class="card" id="foodweight"><h3>Body weight</h3><p class="muted">Type today's number.</p><div class="inl"><input id="bw" type="text" inputmode="decimal" autocomplete="off" placeholder="Weight (${g.unit})"><button class="btn" onclick="addWeight()">Log</button></div>
  ${S.weights.length?`<p class="muted">Latest ${wMA().at(-1).w} ${g.unit} · 7-day avg ${r1(wMA().at(-1).ma)}</p><div class="chart"><canvas id="wchart"></canvas></div>${weighList()}`:'<p class="muted">No entries yet.</p>'}</div>
  ${goalCard()}`;
  if(S.weights.length)drawWeight()}
@@ -305,7 +304,7 @@ function openSession(i){const s=S.sessions[i];if(!s)return;const by={};s.sets.fo
  <button class="btn danger wide" onclick="deleteSession(${i})">Delete workout</button>`)}
 function deleteSession(i){if(!confirm('Delete this workout from your history? Charts and previous numbers will update.'))return;const [rm]=S.sessions.splice(i,1);save();closeModal();renderCur()
  toast('Workout deleted',5000,'Undo',()=>{S.sessions.splice(i,0,rm);save();renderCur()})}
-function renderCur(){const t=location.hash.slice(1)||'food';const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings,holiday:typeof renderHoliday==='function'?renderHoliday:null}[t]||renderProgress;fn()}
+function renderCur(){const t=location.hash.slice(1)||'food';const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn()}
 function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
  day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,...(e.id?{id:e.id}:{}),muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
@@ -315,8 +314,8 @@ function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
 
 /* ---------- progress ---------- */
 const e1rm=s=>s.w*(1+s.r/30);
-function renderProgress(){const lifts=[...new Set(S.sessions.flatMap(s=>s.sets.map(x=>x.ex)))],entry=typeof holidayEntry==='function'?holidayEntry():'';
- $('#progress').innerHTML=!S.sessions.length?entry+'<div class="card"><p class="muted">Log workouts to see progress (or load demo data in Settings).</p></div>':entry+`
+function renderProgress(){const lifts=[...new Set(S.sessions.flatMap(s=>s.sets.map(x=>x.ex)))];
+ $('#progress').innerHTML=!S.sessions.length?'<div class="card"><p class="muted">Log workouts to see progress (or load demo data in Settings).</p></div>':`
  <div class="card"><h3>Lift progress</h3><select id="lsel" onchange="drawLift()">${lifts.map(l=>`<option>${esc(l)}</option>`).join('')}</select><div id="lstat" class="muted"></div><div class="chart"><canvas id="lchart"></canvas></div></div>
  <div class="card"><h3>Weekly sets per muscle</h3><div class="chart tall"><canvas id="vchart"></canvas></div></div>
  <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-6).reverse().map((s,ri)=>`<div class="row tap" onclick="openSession(${S.sessions.length-1-ri})"><div><b>${s.day}</b><small>${s.date} · ${s.sets.length} sets</small></div><div class="rt">${Math.round(s.sets.reduce((a,x)=>a+x.w*x.r,0)).toLocaleString()} vol</div></div>`).join('')}</div>`;
@@ -357,7 +356,7 @@ function seedDemo(){if(!confirm('Add demo data (sample food, weights, 3 weeks of
 
 /* ---------- modal ---------- */
 function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="link center" onclick="closeModal()">Cancel</button></div>`;$('#modal').hidden=false}
-function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hidden=true;if(location.hash==='#settings')renderSettings();else if(location.hash==='#holiday'&&typeof renderHoliday==='function')renderHoliday()}
+function closeModal(){if(typeof scanStop==='function')scanStop();$('#modal').hidden=true;if(location.hash==='#settings')renderSettings();else if(location.hash==='#food')renderFood()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 function schedMigrate(){S.mig||={};if(S.mig.schedThu)return;
  const key=n=>/booty/i.test(String(n||''))?'booty':'';
@@ -368,7 +367,7 @@ function schedMigrate(){S.mig||={};if(S.mig.schedThu)return;
    if(S.active){if(ni<0||key(activeName)==='booty')S.active=null;else S.active.key=S.meso.week+'-'+ni}}}
  S.mig.schedThu=1;save()}
 mealMigrate();slotMigrate();schedMigrate();
-startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1,holiday:1})?location.hash.slice(1):'food');
+startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 function doneSummary(name,sets,prev){const u=S.settings.unit||'lb',by={};sets.forEach(x=>(by[x.ex]||=[]).push(x));
