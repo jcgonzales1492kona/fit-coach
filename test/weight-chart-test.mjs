@@ -80,14 +80,31 @@ eq(mealPer(chili[0]).kcal,670,'logging uses the chili estimate');
 assert(!('fiber' in chili[0].label),'fiber is not stored');
 assert(chili[0].note.includes('350 g cooked chili')&&chili[0].note.includes('estimate')&&!/—/.test(chili[0].note),'the note names the bowl and stays plain');
 eq(vm.runInContext(`(()=>{const m=S.meals.find(x=>x.name==='Turkey Chili Rice Bowl');const g=n=>m.items.find(it=>FOODS.find(f=>f.id===it.fid).name===n).g;return g('Ground turkey 93/7, raw')+'|'+g('White rice, cooked')})()`,ctx),'680|600','turkey is the raw batch and rice is the cooked batch');
+for(const [name,broth,oil] of [['High-Protein Chicken Mac and Cheese',120,5],['Slow Cooker High-Protein Chicken Mac and Cheese',360,0]]){
+ const rows=ctx.S.meals.filter(m=>m.name===name);
+ eq(rows.length,1,name+' is added once');
+ eq(mealCourse(rows[0]),'dinner',name+' is dinner');
+ eq(rows[0].servings,4,name+' serves 4');
+ eq(rows[0].label.kcal,600,name+' calories');
+ eq(rows[0].label.p,67,name+' protein');
+ eq(rows[0].label.c,58,name+' carbs');
+ eq(rows[0].label.f,12,name+' fat');
+ eq(mealPer(rows[0]).kcal,600,name+' logs the estimate');
+ assert(!('fiber' in rows[0].label),name+' does not store fiber');
+ assert(rows[0].note.includes('Estimates from Cooking Guide')&&rows[0].note.includes('4 g fiber')&&!/—/.test(rows[0].note),name+' note stays plain');
+ const grams=vm.runInContext(`(()=>{const m=S.meals.find(x=>x.name===${JSON.stringify(name)});const g=n=>{const it=m.items.find(x=>FOODS.find(f=>f.id===x.fid).name===n);return it?it.g:0};return [g('Chicken breast, raw'),g('Pasta, dry'),g('Chicken broth'),g('Olive oil')].join('|')})()`,ctx);
+ eq(grams,'600|225|'+broth+'|'+oil,name+' batch weights');
+}
 eq(ctx.S.meals.find(m=>m.id==='m-keep').note,'keep','an existing meal stays');
 eq(JSON.stringify(ctx.S.log),logBefore,'adding the meal does not change the food log');
 eq(ctx.S.settings.kcal,kcal,'saved goals stay');
-ctx.S.mig.mealHide={'chicken + gravy protein mash bowls':1,'turkey chili rice bowl':1};
-ctx.S.meals=ctx.S.meals.filter(m=>m.name!=='Chicken + Gravy Protein Mash Bowls'&&m.name!=='Turkey Chili Rice Bowl');
+ctx.S.mig.mealHide={'chicken + gravy protein mash bowls':1,'turkey chili rice bowl':1,'high-protein chicken mac and cheese':1,'slow cooker high-protein chicken mac and cheese':1};
+ctx.S.meals=ctx.S.meals.filter(m=>!['Chicken + Gravy Protein Mash Bowls','Turkey Chili Rice Bowl','High-Protein Chicken Mac and Cheese','Slow Cooker High-Protein Chicken Mac and Cheese'].includes(m.name));
 mealEnsureShipped();
 assert(!ctx.S.meals.some(m=>m.name==='Chicken + Gravy Protein Mash Bowls'),'a deleted shipped meal is not put back');
 assert(!ctx.S.meals.some(m=>m.name==='Turkey Chili Rice Bowl'),'a deleted chili bowl is not put back');
+assert(!ctx.S.meals.some(m=>m.name==='High-Protein Chicken Mac and Cheese'),'a deleted stovetop mac stays deleted');
+assert(!ctx.S.meals.some(m=>m.name==='Slow Cooker High-Protein Chicken Mac and Cheese'),'a deleted slow cooker mac stays deleted');
 assert(ctx.S.meals.some(m=>m.id==='m-keep'),'deleting one meal leaves the others');
 
 console.log(fail?`failed ${fail}, passed ${pass}`:`passed ${pass}`);

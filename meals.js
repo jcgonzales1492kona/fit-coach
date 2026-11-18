@@ -71,7 +71,9 @@ const MEAL_COURSE_NAME={
  'baked ziti':'dinner',
  'high-protein baked ziti':'dinner',
  'chicken + gravy protein mash bowls':'dinner',
- 'turkey chili rice bowl':'dinner'};
+ 'turkey chili rice bowl':'dinner',
+ 'high-protein chicken mac and cheese':'dinner',
+ 'slow cooker high-protein chicken mac and cheese':'dinner'};
 /* Card calories and protein. Carbs and fat are estimates from the foods above.
    Mash ingredients are 1,120 g of the about 1,560 g batch. The rest is not in this meal. Spices are omitted. */
 const MEAL_MASH={name:'Chicken + Gravy Protein Mash Bowls',course:'dinner',servings:4,cook:{kcal:530,p:56},
@@ -83,7 +85,17 @@ const MEAL_CHILI={name:'Turkey Chili Rice Bowl',course:'dinner',servings:4,cook:
  label:{kcal:670,p:52,c:73,f:17},
  items:[['Ground turkey 93/7, raw',680],['Onion',148],['Bell pepper',148],['Fire-roasted diced tomatoes',412],['Kidney beans, cooked',248],['Tomato paste',16],['Chicken broth',120],['White rice, cooked',600],['Greek yogurt nonfat plain',200],['Cheddar cheese, reduced fat',60],['Onion',80]],
  note:'Per serving: one bowl, about 350 g cooked chili, 150 g cooked white rice, and toppings (50 g nonfat Greek yogurt, 15 g reduced-fat cheddar, 20 g pickled red onion). Makes 4. The chili batch is about 1,400 g cooked. Macros are an estimate: 670 kcal, 52 g protein, 73 g carbs, 17 g fat. About 7 g fiber is not stored. Chili powder, cumin, oregano, salt, and green onion are omitted. Rice is the cooked weight.'};
-function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST,MEAL_MASH,MEAL_CHILI]}
+/* Cooking Guide estimates. Fiber stays in the note. Salt and pepper are omitted. Elbow macaroni is dry pasta. */
+const MEAL_MAC_ITEMS=[['Chicken breast, raw',600],['Pasta, dry',225],['Broccoli',300],['Cottage cheese 1%',340],['Greek yogurt nonfat plain',240],['Cheddar cheese, reduced fat',85],['Parmesan',20]];
+const MEAL_MAC={name:'High-Protein Chicken Mac and Cheese',course:'dinner',servings:4,cook:{kcal:600,p:67},
+ label:{kcal:600,p:67,c:58,f:12},
+ items:[...MEAL_MAC_ITEMS,['Chicken broth',120],['Dijon mustard',10],['Garlic powder',3],['Onion powder',3],['Smoked paprika',3],['Olive oil',5]],
+ note:'Stovetop. Serves 4. About 4 g fiber per serving. 5 portions instead of 4 is about 480 kcal and 53 g protein each. Estimates from Cooking Guide. Keeps 4 days in the fridge.'};
+const MEAL_MAC_SLOW={name:'Slow Cooker High-Protein Chicken Mac and Cheese',course:'dinner',servings:4,cook:{kcal:600,p:67},
+ label:{kcal:600,p:67,c:58,f:12},
+ items:[...MEAL_MAC_ITEMS,['Chicken broth',360],['Dijon mustard',10],['Garlic powder',3],['Onion powder',3],['Smoked paprika',3]],
+ note:'Slow cooker, 3 hr low or 1.5 hr high. Serves 4. About 4 g fiber per serving. Estimates from Cooking Guide. Never cook the dairy on high. Keeps 4 days in the fridge.'};
+function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST,MEAL_MASH,MEAL_CHILI,MEAL_MAC,MEAL_MAC_SLOW]}
 /* Exact name only. High-Protein Baked Ziti stays. Logged entries keep their saved numbers. */
 function mealDropPlainZiti(){if(S.mig.mealDropPlainZiti)return;const next=S.meals.filter(m=>(m.name||'').trim().toLowerCase()!=='baked ziti');
  if(next.length!==S.meals.length)S.meals=next;S.mig.mealDropPlainZiti=1;save()}
