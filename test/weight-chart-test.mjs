@@ -95,16 +95,28 @@ for(const [name,broth,oil] of [['High-Protein Chicken Mac and Cheese',120,5],['S
  const grams=vm.runInContext(`(()=>{const m=S.meals.find(x=>x.name===${JSON.stringify(name)});const g=n=>{const it=m.items.find(x=>FOODS.find(f=>f.id===x.fid).name===n);return it?it.g:0};return [g('Chicken breast, raw'),g('Pasta, dry'),g('Chicken broth'),g('Olive oil')].join('|')})()`,ctx);
  eq(grams,'600|225|'+broth+'|'+oil,name+' batch weights');
 }
+const popper=ctx.S.meals.filter(m=>m.name==='Jalapeño Popper Mac N Cheese');
+eq(popper.length,1,'the popper mac is added once');
+eq(mealCourse(popper[0]),'dinner','the popper mac is dinner');
+eq(popper[0].servings,5,'the popper mac makes 5');
+eq(popper[0].label.kcal,510,'popper calories');
+eq(popper[0].label.p,40,'popper protein');
+eq(popper[0].label.c,65,'popper carbs');
+eq(popper[0].label.f,12,'popper fat');
+eq(mealPer(popper[0]).kcal,510,'popper logs the estimate');
+assert(popper[0].note.startsWith('Makes 5 servings.')&&popper[0].note.includes('top with bacon and chives.')&&!/—/.test(popper[0].note),'the popper note is the plain recipe text');
+eq(vm.runInContext(`(()=>{const m=S.meals.find(x=>x.name==='Jalapeño Popper Mac N Cheese');const g=n=>m.items.find(it=>FOODS.find(f=>f.id===it.fid).name===n).g;return [g('Chicken breast, raw'),g('Pasta, dry'),g('Cottage cheese 2%'),g('Cream cheese, light'),g('Milk 1%'),g('Honey')].join('|')})()`,ctx),'397|380|300|80|60|25','popper batch weights');
 eq(ctx.S.meals.find(m=>m.id==='m-keep').note,'keep','an existing meal stays');
 eq(JSON.stringify(ctx.S.log),logBefore,'adding the meal does not change the food log');
 eq(ctx.S.settings.kcal,kcal,'saved goals stay');
-ctx.S.mig.mealHide={'chicken + gravy protein mash bowls':1,'turkey chili rice bowl':1,'high-protein chicken mac and cheese':1,'slow cooker high-protein chicken mac and cheese':1};
-ctx.S.meals=ctx.S.meals.filter(m=>!['Chicken + Gravy Protein Mash Bowls','Turkey Chili Rice Bowl','High-Protein Chicken Mac and Cheese','Slow Cooker High-Protein Chicken Mac and Cheese'].includes(m.name));
+ctx.S.mig.mealHide={'chicken + gravy protein mash bowls':1,'turkey chili rice bowl':1,'high-protein chicken mac and cheese':1,'slow cooker high-protein chicken mac and cheese':1,'jalapeño popper mac n cheese':1};
+ctx.S.meals=ctx.S.meals.filter(m=>!['Chicken + Gravy Protein Mash Bowls','Turkey Chili Rice Bowl','High-Protein Chicken Mac and Cheese','Slow Cooker High-Protein Chicken Mac and Cheese','Jalapeño Popper Mac N Cheese'].includes(m.name));
 mealEnsureShipped();
 assert(!ctx.S.meals.some(m=>m.name==='Chicken + Gravy Protein Mash Bowls'),'a deleted shipped meal is not put back');
 assert(!ctx.S.meals.some(m=>m.name==='Turkey Chili Rice Bowl'),'a deleted chili bowl is not put back');
 assert(!ctx.S.meals.some(m=>m.name==='High-Protein Chicken Mac and Cheese'),'a deleted stovetop mac stays deleted');
 assert(!ctx.S.meals.some(m=>m.name==='Slow Cooker High-Protein Chicken Mac and Cheese'),'a deleted slow cooker mac stays deleted');
+assert(!ctx.S.meals.some(m=>m.name==='Jalapeño Popper Mac N Cheese'),'a deleted popper mac stays deleted');
 assert(ctx.S.meals.some(m=>m.id==='m-keep'),'deleting one meal leaves the others');
 
 console.log(fail?`failed ${fail}, passed ${pass}`:`passed ${pass}`);
