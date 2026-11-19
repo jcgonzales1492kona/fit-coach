@@ -73,7 +73,8 @@ const MEAL_COURSE_NAME={
  'chicken + gravy protein mash bowls':'dinner',
  'turkey chili rice bowl':'dinner',
  'high-protein chicken mac and cheese':'dinner',
- 'slow cooker high-protein chicken mac and cheese':'dinner'};
+ 'slow cooker high-protein chicken mac and cheese':'dinner',
+ 'jalapeño popper mac n cheese':'dinner'};
 /* Card calories and protein. Carbs and fat are estimates from the foods above.
    Mash ingredients are 1,120 g of the about 1,560 g batch. The rest is not in this meal. Spices are omitted. */
 const MEAL_MASH={name:'Chicken + Gravy Protein Mash Bowls',course:'dinner',servings:4,cook:{kcal:530,p:56},
@@ -95,7 +96,12 @@ const MEAL_MAC_SLOW={name:'Slow Cooker High-Protein Chicken Mac and Cheese',cour
  label:{kcal:600,p:67,c:58,f:12},
  items:[...MEAL_MAC_ITEMS,['Chicken broth',360],['Dijon mustard',10],['Garlic powder',3],['Onion powder',3],['Smoked paprika',3]],
  note:'Slow cooker, 3 hr low or 1.5 hr high. Serves 4. About 4 g fiber per serving. Estimates from Cooking Guide. Never cook the dairy on high. Keeps 4 days in the fridge.'};
-function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST,MEAL_MASH,MEAL_CHILI,MEAL_MAC,MEAL_MAC_SLOW]}
+/* Cooking Guide estimate. 14 oz chicken is 397 g. Ten center-cut bacon slices are about 55 g cooked. Seasoning, jalapeno juice, and chives stay in the note. */
+const MEAL_POPPER={name:'Jalapeño Popper Mac N Cheese',course:'dinner',servings:5,cook:{kcal:510,p:40},
+ label:{kcal:510,p:40,c:65,f:12},
+ items:[['Chicken breast, raw',397],['Bacon, cooked',55],['Pasta, dry',380],['Cottage cheese 2%',300],['Cream cheese, light',80],['Milk 1%',60],['Pickled jalapeno',50],['Honey',25]],
+ note:'Makes 5 servings. 14 oz chicken breast seasoned with salt, garlic, onion, pepper, paprika; 10 slices center cut bacon; 380 g elbow pasta. Sauce: 300 g 2% cottage cheese, 80 g light cream cheese, 60 g 1% milk, 10 diced pickled jalapeno pieces, 2 tbsp pickled jalapeno juice, 25 g honey, salt and pepper. Air fry chicken 12 min at 375, blend sauce, cook pasta, crisp diced bacon, warm sauce in pan off heat, combine with pasta and chicken, top with bacon and chives.'};
+function mealShipped(){return [MEAL_SEED,...MEAL_SEEDS,MEAL_BURRITO,...MEAL_BREAKFAST,MEAL_MASH,MEAL_CHILI,MEAL_MAC,MEAL_MAC_SLOW,MEAL_POPPER]}
 /* Exact name only. High-Protein Baked Ziti stays. Logged entries keep their saved numbers. */
 function mealDropPlainZiti(){if(S.mig.mealDropPlainZiti)return;const next=S.meals.filter(m=>(m.name||'').trim().toLowerCase()!=='baked ziti');
  if(next.length!==S.meals.length)S.meals=next;S.mig.mealDropPlainZiti=1;save()}

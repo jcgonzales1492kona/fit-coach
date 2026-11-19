@@ -172,7 +172,10 @@ Cheddar cheese, reduced fat|316|27.4|2.7|20.4
 Dijon mustard|66|4.4|5.8|3.3
 Garlic powder|331|16.6|72.7|0.7
 Onion powder|341|10.4|79.1|1
-Smoked paprika|282|14.1|54|12.9`;
+Smoked paprika|282|14.1|54|12.9
+Milk 1%|42|3.4|5|1
+Cream cheese, light|197|6.6|6.6|16.4
+Pickled jalapeno|27|0.9|4.7|0.4`;
 const FOODS=FOODS_RAW.split('\n').map((l,i)=>{const[n,k,p,c,f]=l.split('|');return{id:'b'+i,name:n,kcal:+k,p:+p,c:+c,f:+f}});
 // exercises: name|primary muscle|type(c=compound,i=isolation)
 const EX_RAW=`Barbell Bench Press|chest|c
