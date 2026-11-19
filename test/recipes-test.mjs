@@ -1,0 +1,32 @@
+import vm from 'node:vm';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const ctx={S:{meals:[],mig:{mealSeed:1,mealSeedCookbook4:1,mealSeedBurrito:1,mealDropPlainZiti:1,mealCompute:1},log:{},settings:{kcal:1800}},saves:0};
+ctx.save=()=>{ctx.saves++};
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(root,'data.js'),'utf8'),ctx,{filename:'data.js'});
+vm.runInContext('function foodById(id){return FOODS.find(f=>f.id===id)||(S.custom||[]).find(f=>f.id===id)}',ctx);
+vm.runInContext(fs.readFileSync(path.join(root,'meals.js'),'utf8'),ctx,{filename:'meals.js'});
+vm.runInContext(fs.readFileSync(path.join(root,'recipes.js'),'utf8'),ctx,{filename:'recipes.js'});
+const {mealEnsureShipped,mealShipped,recipeCards,recipeSteps}=ctx;
+let pass=0,fail=0;
+function assert(c,m){if(c){pass++;return}fail++;console.error('FAIL:',m)}
+mealEnsureShipped();
+const cards=recipeCards();
+const names=mealShipped().map(s=>s.name);
+names.forEach(n=>assert(cards.some(c=>c.name===n),'recipe list includes '+n));
+const pop=cards.find(c=>c.name==='Jalapeño Popper Mac N Cheese');
+assert(pop&&pop.steps&&pop.steps.length===7,'jalapeño has the saved method');
+const note=pop.model.note.toLowerCase();
+pop.steps.forEach(s=>assert(note.includes(s.replace(/\.$/,'').toLowerCase()),'step is in the note: '+s));
+cards.filter(c=>c.name!=='Jalapeño Popper Mac N Cheese').forEach(c=>assert(!c.steps,'no invented method for '+c.name));
+assert(!recipeSteps('Stealth-Health Berry Overnight Oats'),'oats stay without steps');
+const src=fs.readFileSync(path.join(root,'recipes.js'),'utf8');
+assert(src.includes('Full recipe not added yet'),'incomplete meals are marked');
+assert(!/[\u2013\u2014]/.test(src),'recipe copy has no em dash');
+assert(pop.model.label.kcal===510&&pop.model.servings===5,'popper macros and servings stay');
+console.log(fail?`failed ${fail}, passed ${pass}`:`passed ${pass}`);
+process.exit(fail?1:0);

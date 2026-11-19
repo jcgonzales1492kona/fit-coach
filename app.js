@@ -80,7 +80,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 function show(t){if(t!=='workout'&&typeof KP!=='undefined'&&KP)closeKP(false);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
  document.querySelectorAll('section.tab').forEach(s=>s.hidden=s.id!==t);
- if(t==='holiday')t='food';const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn();location.hash=t;window.scrollTo(0,0)}
+ if(t==='holiday')t='food';const fn={food:renderFood,recipes:typeof renderRecipes==='function'?renderRecipes:null,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn();location.hash=t;window.scrollTo(0,0)}
 
 /* ---------- food ---------- */
 const QA_MAX=6;let qaOpen=false;
@@ -304,7 +304,7 @@ function openSession(i){const s=S.sessions[i];if(!s)return;const by={};s.sets.fo
  <button class="btn danger wide" onclick="deleteSession(${i})">Delete workout</button>`)}
 function deleteSession(i){if(!confirm('Delete this workout from your history? Charts and previous numbers will update.'))return;const [rm]=S.sessions.splice(i,1);save();closeModal();renderCur()
  toast('Workout deleted',5000,'Undo',()=>{S.sessions.splice(i,0,rm);save();renderCur()})}
-function renderCur(){const t=location.hash.slice(1)||'food';const fn={food:renderFood,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn()}
+function renderCur(){const t=location.hash.slice(1)||'food';const fn={food:renderFood,recipes:typeof renderRecipes==='function'?renderRecipes:null,workout:renderWorkout,cond:renderCond,progress:renderProgress,settings:renderSettings}[t]||renderFood;fn()}
 function finishWorkout(){const M=S.meso,A=act(),day=M.plan[M.day],sets=[];
  day.ex.forEach((e,ei)=>(A.sets[ei]||[]).forEach(s=>{if(s.done&&s.w!==''&&s.r!=='')sets.push({ex:e.name,...(e.id?{id:e.id}:{}),muscle:e.muscle,w:+s.w,r:+s.r,rir:+(s.rir===''?curRIR():s.rir)})}));
  if(!sets.length){alert('Check off at least one set first.');return}
@@ -367,7 +367,7 @@ function schedMigrate(){S.mig||={};if(S.mig.schedThu)return;
    if(S.active){if(ni<0||key(activeName)==='booty')S.active=null;else S.active.key=S.meso.week+'-'+ni}}}
  S.mig.schedThu=1;save()}
 mealMigrate();slotMigrate();schedMigrate();
-startupStorage();show((location.hash.slice(1)in{food:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
+startupStorage();show((location.hash.slice(1)in{food:1,recipes:1,workout:1,cond:1,progress:1,settings:1})?location.hash.slice(1):'food');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 function doneSummary(name,sets,prev){const u=S.settings.unit||'lb',by={};sets.forEach(x=>(by[x.ex]||=[]).push(x));
