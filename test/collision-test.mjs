@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const files=['data.js','body.js','cond.js','goals.js','meals.js','slots.js','edit.js','trends.js','app.js','holiday.js','scan.js'];
+const files=['data.js','body.js','cond.js','goals.js','meals.js','slots.js','edit.js','trends.js','app.js','holiday.js','recipes.js','scan.js'];
 const fns=new Map(),lex=new Map();
 function add(map,name,file){if(!map.has(name))map.set(name,[]);map.get(name).push(file)}
 for(const file of files){
